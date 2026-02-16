@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fire Emblem: Three Houses Style Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="960" height="640"></canvas>
+        <div id="ui-layer">
+            <!-- UI elements will be injected here -->
+            <div id="cursor-info" class="panel hidden">
+                <h3 id="cursor-name">Terrain</h3>
+                <p id="cursor-details">Def: 0, Avo: 0</p>
+            </div>
+            
+            <div id="unit-info" class="panel hidden">
+                <h3 id="unit-name">Unit Name</h3>
+                <div class="stats-row">
+                    <span>HP: <span id="unit-hp">20/20</span></span>
+                    <span>Lvl: <span id="unit-lvl">1</span></span>
+                </div>
+            </div>
+
+            <div id="action-menu" class="menu hidden">
+                <ul>
+                    <li data-action="attack">Attack</li>
+                    <li data-action="item">Item</li>
+                    <li data-action="wait">Wait</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>

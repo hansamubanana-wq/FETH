@@ -1,0 +1,106 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #2c2c2c;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
+}
+
+#game-container {
+    position: relative;
+    width: 960px;
+    height: 640px;
+    background-color: #000;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+canvas {
+    display: block;
+}
+
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Let clicks pass through to canvas primarily, enable for menus */
+}
+
+.panel {
+    position: absolute;
+    background: rgba(40, 40, 40, 0.9);
+    border: 2px solid #dab458; /* Gold border like FE */
+    padding: 10px;
+    border-radius: 5px;
+    min-width: 150px;
+    pointer-events: auto;
+}
+
+#cursor-info {
+    bottom: 10px;
+    right: 10px;
+}
+
+#unit-info {
+    bottom: 10px;
+    left: 10px;
+}
+
+.hidden {
+    display: none;
+}
+
+h3 {
+    margin: 0 0 5px 0;
+    border-bottom: 1px solid #777;
+    font-size: 16px;
+    color: #e8d08c;
+}
+
+p, .stats-row {
+    margin: 0;
+    font-size: 14px;
+}
+
+.menu {
+    position: absolute;
+    background: rgba(250, 248, 239, 0.95); /* Light parchment style */
+    color: #333;
+    border: 2px solid #5c4b38;
+    border-radius: 4px;
+    min-width: 120px;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+    pointer-events: auto;
+}
+
+.menu ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.menu li {
+    padding: 8px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #dcdcdc;
+    font-weight: bold;
+}
+
+.menu li:last-child {
+    border-bottom: none;
+}
+
+.menu li:hover {
+    background-color: #dab458;
+    color: white;
+}
+
+.menu li.selected {
+    background-color: #bfa048; /* Darker gold for keyboard selection */
+    color: white;
+}
