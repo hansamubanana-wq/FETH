@@ -325,12 +325,33 @@ export class Game {
             this.cursor.draw(this.ctx, this.tileSize);
         }
 
-        // Draw Turn Indicator
+        // Draw Turn Banner
+        const bannerY = 30;
+        const bannerHeight = 40;
+        const text = this.turn === "player" ? "PLAYER PHASE" : "ENEMY PHASE";
+        const color = this.turn === "player" ? "#1e88e5" : "#e53935";
+
+        // Banner Background (Gradient)
+        const grad = this.ctx.createLinearGradient(0, bannerY - 20, this.width, bannerY - 20);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(0.2, color);
+        grad.addColorStop(0.8, color);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+
+        this.ctx.fillStyle = grad;
+        this.ctx.fillRect(0, bannerY - 25, this.width, bannerHeight);
+
+        // Banner Text
+        this.ctx.font = "bold 24px 'Segoe UI', serif";
         this.ctx.fillStyle = "white";
-        this.ctx.font = "20px Arial";
-        this.ctx.strokeStyle = "black";
-        this.ctx.lineWidth = 3;
-        this.ctx.strokeText(this.turn.toUpperCase() + " PHASE", 10, 30);
-        this.ctx.fillText(this.turn.toUpperCase() + " PHASE", 10, 30);
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+
+        // Text Shadow
+        this.ctx.shadowColor = "black";
+        this.ctx.shadowBlur = 4;
+        this.ctx.fillText(text, this.width / 2, bannerY - 5);
+
+        this.ctx.shadowBlur = 0; // Reset
     }
 }

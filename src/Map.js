@@ -28,23 +28,68 @@ export class Map {
                 const xPos = x * this.tileSize;
                 const yPos = y * this.tileSize;
 
-                // Color based on terrain
-                if (terrain === 1) {
-                    ctx.fillStyle = "#2d6a4f"; // Forest Green
-                } else {
-                    ctx.fillStyle = "#8d99ae"; // Plain Greyish
-                    // Checkerboard pattern for visibility
-                    if ((x + y) % 2 === 0) {
-                        ctx.fillStyle = "#9ba8be";
-                    }
+                // Base Ground
+                ctx.fillStyle = "#8da25d"; // Base Grass
+                if ((x + y) % 2 === 0) {
+                    ctx.fillStyle = "#96ad63"; // Checkerboard
                 }
-
                 ctx.fillRect(xPos, yPos, this.tileSize, this.tileSize);
 
-                // Grid lines (optional, maybe make subtle)
-                ctx.strokeStyle = "rgba(0,0,0,0.1)";
+                // Draw Detail based on terrain
+                if (terrain === 1) { // Forest
+                    this.drawForest(ctx, xPos, yPos);
+                } else {
+                    // Random grass tufts for detail
+                    this.drawGrassDetail(ctx, xPos, yPos, x, y);
+                }
+
+                // Grid lines - subtle
+                ctx.strokeStyle = "rgba(0,0,0,0.05)";
                 ctx.strokeRect(xPos, yPos, this.tileSize, this.tileSize);
             }
+        }
+    }
+
+    drawForest(ctx, x, y) {
+        const ts = this.tileSize;
+        // Darker patch under trees
+        ctx.fillStyle = "#2d6a4f";
+        ctx.fillRect(x, y, ts, ts);
+
+        // Draw 3 little trees
+        ctx.fillStyle = "#1b4332";
+
+        // Tree 1
+        ctx.beginPath();
+        ctx.moveTo(x + ts * 0.5, y + ts * 0.1);
+        ctx.lineTo(x + ts * 0.8, y + ts * 0.8);
+        ctx.lineTo(x + ts * 0.2, y + ts * 0.8);
+        ctx.fill();
+
+        // Tree 2 (Offset)
+        ctx.fillStyle = "#2d6a4f";
+        ctx.beginPath();
+        ctx.moveTo(x + ts * 0.3, y + ts * 0.3);
+        ctx.lineTo(x + ts * 0.6, y + ts * 0.9);
+        ctx.lineTo(x + ts * 0.0, y + ts * 0.9);
+        ctx.fill();
+
+        // Tree 3 (Lighter top)
+        ctx.fillStyle = "#40916c";
+        ctx.beginPath();
+        ctx.moveTo(x + ts * 0.7, y + ts * 0.2);
+        ctx.lineTo(x + ts * 1.0, y + ts * 0.7);
+        ctx.lineTo(x + ts * 0.4, y + ts * 0.7);
+        ctx.fill();
+    }
+
+    drawGrassDetail(ctx, x, y, gx, gy) {
+        // Pseudo-random based on position
+        if ((gx * 7 + gy * 3) % 5 === 0) {
+            ctx.fillStyle = "#aacc66";
+            ctx.fillRect(x + 5, y + 10, 2, 4);
+            ctx.fillRect(x + 7, y + 8, 2, 6);
+            ctx.fillRect(x + 9, y + 11, 2, 3);
         }
     }
 

@@ -90,14 +90,41 @@ export class Cursor {
     draw(ctx, tileSize) {
         const xPos = this.x * tileSize;
         const yPos = this.y * tileSize;
+        const time = Date.now() / 300;
+        const glow = Math.sin(time) * 0.2 + 0.5; // 0.3 to 0.7
 
-        // Draw cursor styling (thick border)
-        ctx.strokeStyle = "#fb8500"; // Orange/Gold
+        // Pulsing Selection Box
+        ctx.strokeStyle = `rgba(251, 133, 0, ${glow + 0.3})`; // Orange
         ctx.lineWidth = 3;
-        ctx.strokeRect(xPos, yPos, tileSize, tileSize);
 
-        // Inner highlight
-        ctx.fillStyle = "rgba(251, 133, 0, 0.2)";
+        // Draw brackets corners instead of full box
+        const len = tileSize / 3;
+
+        ctx.beginPath();
+        // Top Left
+        ctx.moveTo(xPos, yPos + len);
+        ctx.lineTo(xPos, yPos);
+        ctx.lineTo(xPos + len, yPos);
+
+        // Top Right
+        ctx.moveTo(xPos + tileSize - len, yPos);
+        ctx.lineTo(xPos + tileSize, yPos);
+        ctx.lineTo(xPos + tileSize, yPos + len);
+
+        // Bottom Right
+        ctx.moveTo(xPos + tileSize, yPos + tileSize - len);
+        ctx.lineTo(xPos + tileSize, yPos + tileSize);
+        ctx.lineTo(xPos + tileSize - len, yPos + tileSize);
+
+        // Bottom Left
+        ctx.moveTo(xPos + len, yPos + tileSize);
+        ctx.lineTo(xPos, yPos + tileSize);
+        ctx.lineTo(xPos, yPos + tileSize - len);
+
+        ctx.stroke();
+
+        // Inner faint fill
+        ctx.fillStyle = `rgba(251, 133, 0, ${glow * 0.3})`;
         ctx.fillRect(xPos, yPos, tileSize, tileSize);
     }
 }

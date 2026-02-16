@@ -14,36 +14,66 @@ export class Unit {
     }
 
     update(deltaTime) {
-        // visual animations (idle bobbing) can go here
+        // Simple interpolation for smooth movement could go here
     }
 
     draw(ctx, tileSize) {
         const xPos = this.x * tileSize;
         const yPos = this.y * tileSize;
+        const center = tileSize / 2;
 
-        // Draw Unit Placeholder
-        if (this.isGrayedOut) {
-            ctx.fillStyle = "#888";
-        } else {
-            ctx.fillStyle = this.faction === 'player' ? "#4361ee" : "#d00000"; // Blue for player, Red for enemy
-        }
-
-        // Draw circle for unit
+        // Draw shadow
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
         ctx.beginPath();
-        ctx.arc(xPos + tileSize / 2, yPos + tileSize / 2, tileSize / 2.5, 0, Math.PI * 2);
+        ctx.ellipse(xPos + center, yPos + tileSize - 4, center - 6, 3, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw highlight/shadow to make it look like a token
-        ctx.strokeStyle = "white";
+        // Save context for filters/effects
+        ctx.save();
+
+        if (this.isGrayedOut) {
+            ctx.filter = "grayscale(100%) brightness(80%)";
+        }
+
+        // Unit Token Base
+        ctx.fillStyle = this.faction === "player" ? "#4ea5f9" : "#ef476f";
+        if (this.name === "Edelgard") ctx.fillStyle = "#d90429";
+
+        ctx.beginPath();
+        ctx.arc(xPos + center, yPos + center - 2, tileSize * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Token Border
         ctx.lineWidth = 2;
+        ctx.strokeStyle = "white";
         ctx.stroke();
 
-        // Draw HP Bar
-        const hpPct = this.hp / this.maxHp;
-        ctx.fillStyle = "black";
-        ctx.fillRect(xPos + 2, yPos + tileSize - 6, tileSize - 4, 4);
+        // Inner Letter
+        ctx.fillStyle = "white";
+        ctx.font = "bold 16px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(this.name.charAt(0).toUpperCase(), xPos + center, yPos + center - 1);
 
-        ctx.fillStyle = hpPct > 0.5 ? "#00ff00" : (hpPct > 0.2 ? "orange" : "red");
-        ctx.fillRect(xPos + 2, yPos + tileSize - 6, (tileSize - 4) * hpPct, 4);
+        ctx.restore();
+
+        // HP Bar Background
+        const hpBarWidth = tileSize - 6;
+        const hpBarHeight = 4;
+        const hpBarX = xPos + 3;
+        const hpBarY = yPos + tileSize - 6;
+
+        ctx.fillStyle = "#222";
+        ctx.fillRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
+
+        // HP Bar Foreground
+        const hpPct = Math.max(0, this.hp / this.maxHp);
+        ctx.fillStyle = hpPct > 0.5 ? "#2ecc71" : hpPct > 0.25 ? "#f1c40f" : "#e74c3c";
+        ctx.fillRect(hpBarX, hpBarY, hpBarWidth * hpPct, hpBarHeight);
+
+        // HP Bar Border
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#000";
+        ctx.strokeRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
     }
 }
