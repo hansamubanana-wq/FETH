@@ -196,34 +196,44 @@ canvas {
 /* Combat Forecast */
 #combat-forecast {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 600px;
-    background: rgba(30, 30, 35, 0.95);
-    border: 2px solid #dab458;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    /* Full width */
+    height: 180px;
+    /* Short banner */
+    background: rgba(20, 20, 25, 0.95);
+    border-top: 3px solid #dab458;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
     color: white;
     z-index: 150;
     display: flex;
     flex-direction: column;
-    padding: 10px;
+    padding: 0;
     font-family: 'Segoe UI', serif;
+    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
+    transform: translate(0, 0);
+    /* Reset previous translate */
 }
 
 .forecast-header {
     display: flex;
     justify-content: space-between;
-    padding: 10px 40px;
+    padding: 10px 10%;
     background: linear-gradient(90deg, rgba(78, 165, 249, 0.3) 0%, rgba(239, 71, 111, 0.3) 100%);
-    margin-bottom: 10px;
-    font-size: 20px;
+    font-size: 24px;
     font-weight: bold;
+    border-bottom: 1px solid #444;
 }
 
 .forecast-body {
     display: flex;
     justify-content: space-between;
-    padding: 0 20px;
+    padding: 10px 10%;
+    align-items: center;
+    flex: 1;
 }
 
 .forecast-stats {
@@ -233,45 +243,34 @@ canvas {
 
 .forecast-stats table {
     width: 100%;
-    border-collapse: collapse;
-}
-
-.forecast-stats th,
-.forecast-stats td {
-    padding: 5px;
-    text-align: center;
 }
 
 .forecast-stats th {
-    color: #aaa;
+    color: #888;
     font-size: 14px;
+    text-transform: uppercase;
+    padding-bottom: 5px;
 }
 
 .forecast-stats td {
-    font-size: 18px;
+    font-size: 22px;
     font-weight: bold;
 }
 
-.stat-label {
-    width: 60px;
-}
-
 .vs-divider {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    font-family: serif;
     font-style: italic;
     color: #dab458;
-    padding: 0 20px;
+    font-size: 30px;
+    padding: 0 40px;
 }
 
 .forecast-footer {
-    margin-top: 15px;
     text-align: center;
     font-size: 14px;
-    color: #ccc;
-    border-top: 1px solid #444;
-    padding-top: 5px;
+    color: #888;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 5px;
 }
 
 

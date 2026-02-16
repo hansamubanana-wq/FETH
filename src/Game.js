@@ -2,6 +2,7 @@ import { Map } from "./Map.js";
 import { Cursor } from "./Cursor.js";
 import { Unit } from "./Unit.js";
 import { Menu } from "./Menu.js";
+import { FX } from "./FX.js";
 
 export class Game {
     constructor(canvas) {
@@ -17,6 +18,7 @@ export class Game {
         this.map = new Map(this.cols, this.rows, this.tileSize);
         this.cursor = new Cursor(this);
         this.menu = new Menu();
+        this.fx = new FX();
         this.units = [];
 
         // Debug unit
@@ -48,6 +50,10 @@ export class Game {
 
         this.update(deltaTime);
         this.draw();
+
+        // Draw FX on top of everything
+        this.fx.update(deltaTime);
+        this.fx.draw(this.ctx);
 
         requestAnimationFrame(this.loop.bind(this));
     }
@@ -269,21 +275,23 @@ export class Game {
             document.getElementById("f-def-hit").innerText = eStats.hit;
             document.getElementById("f-def-crit").innerText = eStats.crit;
 
-            const estCounterDmg = eStats.dmg * (eStats.double ? 2 : 1);
-            document.getElementById("f-atk-res-hp").innerText = Math.max(0, attacker.hp - estCounterDmg);
         }
     }
 
-    executeCombat(attacker, defender) {
+    async executeCombat(attacker, defender) {
         console.log(`${attacker.name} attacks ${defender.name}!`);
+
+        // Hide cursor/UI during animation
+        this.gameState = "ANIMATION";
 
         const pStats = this.calculateCombatStats(attacker, defender);
         const eStats = this.calculateCombatStats(defender, attacker);
 
-        // Attack Sequence: Attacker -> Defender(Counter) -> Attacker(Double) -> Defender(Double)
-        // Simplified: Attacker -> Check Death -> Defender -> Check Death -> Doubles
+        // Helper for one attack action
+        const performAction = async (atk, def, stats) => {
+            // Bump Animation
+            await this.animateBump(atk, def);
 
-        const performAttack = (atk, def, stats) => {
             // Hit Check
             if (Math.random() * 100 < stats.hit) {
                 // Crit Check
@@ -297,31 +305,99 @@ export class Game {
 
                 def.hp -= finalDmg;
                 if (def.hp < 0) def.hp = 0;
-                console.log(`${atk.name} hits for ${finalDmg}${isCrit ? "(Crit)" : ""}. ${def.name} HP: ${def.hp}`);
+
+                // FX
+                this.fx.showDamage(def.x * this.tileSize + 16, def.y * this.tileSize, finalDmg, isCrit);
+
+                // Shake screen or unit if crit?
+                if (isCrit) {
+                    // simplified shake
+                }
+
             } else {
                 console.log(`${atk.name} Missed!`);
+                this.fx.showText(def.x * this.tileSize + 16, def.y * this.tileSize, "Miss", "#aaa");
             }
+
+            // Short pause
+            await new Promise(r => setTimeout(r, 600));
         };
 
         // 1. Attacker attacks
-        performAttack(attacker, defender, pStats);
-        if (defender.hp <= 0) return this.handleDeath(defender);
+        await performAction(attacker, defender, pStats);
+        if (defender.hp <= 0) {
+            this.handleDeath(defender);
+            this.finishAction();
+            return;
+        }
 
         // 2. Defender counters
-        performAttack(defender, attacker, eStats);
-        if (attacker.hp <= 0) return this.handleDeath(attacker);
+        // (Only if range matches, simplified to always true for 1-range)
+        await performAction(defender, attacker, eStats);
+        if (attacker.hp <= 0) {
+            this.handleDeath(attacker);
+            this.finishAction();
+            return;
+        }
 
         // 3. Attacker Double
         if (pStats.double) {
-            performAttack(attacker, defender, pStats);
-            if (defender.hp <= 0) return this.handleDeath(defender);
+            await performAction(attacker, defender, pStats);
+            if (defender.hp <= 0) {
+                this.handleDeath(defender);
+                this.finishAction();
+                return;
+            }
         }
 
         // 4. Defender Double
         if (eStats.double) {
-            performAttack(defender, attacker, eStats);
-            if (attacker.hp <= 0) return this.handleDeath(attacker);
+            await performAction(defender, attacker, eStats);
+            if (attacker.hp <= 0) {
+                this.handleDeath(attacker);
+                this.finishAction();
+                return;
+            }
         }
+
+        this.finishAction();
+    }
+
+    animateBump(unit, target) {
+        return new Promise(resolve => {
+            const dx = (target.x - unit.x) * 16; // 16px bump
+            const dy = (target.y - unit.y) * 16;
+
+            let progress = 0;
+            const duration = 200; // ms
+            const startTime = Date.now();
+
+            const animate = () => {
+                const now = Date.now();
+                const elapsed = now - startTime;
+                let t = Math.min(1, elapsed / duration);
+
+                // T: 0 -> 0.5 (Forward) -> 1.0 (Back)
+                let val;
+                if (t < 0.5) {
+                    val = t * 2; // 0 to 1
+                } else {
+                    val = 1 - (t - 0.5) * 2; // 1 to 0
+                }
+
+                unit.renderX = dx * val;
+                unit.renderY = dy * val;
+
+                if (t < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    unit.renderX = 0;
+                    unit.renderY = 0;
+                    resolve();
+                }
+            };
+            animate();
+        });
     }
 
     handleDeath(unit) {

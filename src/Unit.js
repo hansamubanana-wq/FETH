@@ -15,6 +15,10 @@ export class Unit {
         this.def = 2; // Phys Def
         this.res = 2; // Mag Def
         this.move = 5; // Default movement ranage
+
+        // Rendering Offsets (for animations)
+        this.renderX = 0;
+        this.renderY = 0;
     }
 
     update(deltaTime) {
@@ -22,8 +26,8 @@ export class Unit {
     }
 
     draw(ctx, tileSize) {
-        const xPos = this.x * tileSize;
-        const yPos = this.y * tileSize;
+        const xPos = this.x * tileSize + this.renderX;
+        const yPos = this.y * tileSize + this.renderY;
         const center = tileSize / 2;
 
         // Draw shadow
