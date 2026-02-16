@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fire Emblem: Three Houses Style Game</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div id="game-container">
         <canvas id="game-canvas" width="960" height="640"></canvas>
@@ -15,7 +17,7 @@
                 <h3 id="cursor-name">Terrain</h3>
                 <p id="cursor-details">Def: 0, Avo: 0</p>
             </div>
-            
+
             <div id="unit-info" class="panel hidden">
                 <h3 id="unit-name">Unit Name</h3>
                 <div class="stats-row">
@@ -32,7 +34,29 @@
                 </ul>
             </div>
         </div>
+
+        <!-- Virtual Controls for Mobile -->
+        <div id="virtual-controls" class="hidden-force">
+            <div class="dpad">
+                <div class="dpad-row">
+                    <button id="dpad-up" class="control-btn">▲</button>
+                </div>
+                <div class="dpad-row">
+                    <button id="dpad-left" class="control-btn">◀</button>
+                    <div class="dpad-center"></div>
+                    <button id="dpad-right" class="control-btn">▶</button>
+                </div>
+                <div class="dpad-row">
+                    <button id="dpad-down" class="control-btn">▼</button>
+                </div>
+            </div>
+            <div class="action-buttons">
+                <button id="btn-b" class="control-btn action-btn cancel">B</button>
+                <button id="btn-a" class="control-btn action-btn confirm">A</button>
+            </div>
+        </div>
     </div>
     <script type="module" src="src/main.js"></script>
 </body>
+
 </html>
