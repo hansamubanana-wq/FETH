@@ -33,6 +33,80 @@
                     <li data-action="wait">Wait</li>
                 </ul>
             </div>
+
+            <!-- Tutorial Modal -->
+            <div id="tutorial-modal">
+                <div class="modal-content">
+                    <h2>戦闘開始 - Mission Start</h2>
+                    <p><strong>目的 (Objective):</strong> 敵をすべて撃破せよ</p>
+                    <p><strong>操作方法 (Controls):</strong></p>
+                    <ul>
+                        <li><strong>移動/カーソル (Move):</strong> 矢印キー / D-Pad</li>
+                        <li><strong>決定 (Confirm):</strong> Z / A Button</li>
+                        <li><strong>キャンセル (Cancel):</strong> X / B Button</li>
+                    </ul>
+                    <p><strong>ヒント:</strong> 森(Forest)は回避(Avo)と守備(Def)が上がります。</p>
+                    <div class="close-instruction">Press 'Z' or Tap to Start</div>
+                </div>
+            </div>
+
+            <!-- Combat Forecast -->
+            <div id="combat-forecast" class="hidden">
+                <div class="forecast-header">
+                    <span id="forecast-attacker-name">Byleth</span>
+                    <span id="forecast-defender-name">Bandit</span>
+                </div>
+                <div class="forecast-body">
+                    <!-- Attacker Stats -->
+                    <div class="forecast-stats left">
+                        <table>
+                            <tr>
+                                <th>HP</th>
+                                <td><span id="f-atk-hp">20</span> -> <span id="f-atk-res-hp">20</span></td>
+                            </tr>
+                            <tr>
+                                <th>Mt</th>
+                                <td id="f-atk-mt">12</td>
+                            </tr>
+                            <tr>
+                                <th>Hit</th>
+                                <td id="f-atk-hit">100</td>
+                            </tr>
+                            <tr>
+                                <th>Crit</th>
+                                <td id="f-atk-crit">0</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div class="vs-divider">VS</div>
+
+                    <!-- Defender Stats -->
+                    <div class="forecast-stats right">
+                        <table>
+                            <tr>
+                                <th>HP</th>
+                                <td><span id="f-def-hp">20</span> -> <span id="f-def-res-hp">15</span></td>
+                            </tr>
+                            <tr>
+                                <th>Mt</th>
+                                <td id="f-def-mt">8</td>
+                            </tr>
+                            <tr>
+                                <th>Hit</th>
+                                <td id="f-def-hit">85</td>
+                            </tr>
+                            <tr>
+                                <th>Crit</th>
+                                <td id="f-def-crit">0</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="forecast-footer">
+                    Z: Attack | X: Back
+                </div>
+            </div>
         </div>
 
         <!-- Virtual Controls for Mobile -->

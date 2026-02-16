@@ -27,11 +27,14 @@ export class Game {
         this.lastTime = 0;
 
         // Game State
-        this.gameState = "MAP"; // MAP, UNIT_MOVE, MENU
+        this.gameState = "TUTORIAL"; // TUTORIAL, MAP, UNIT_MOVE, MENU, FORECAST
         this.selectedUnit = null;
+        this.targetUnit = null; // For forecast
         this.validMoves = [];
         this.originalPos = { x: 0, y: 0 }; // Store original pos if cancel
         this.turn = "player"; // 'player' or 'enemy'
+
+        this.initTutorial();
     }
 
     start() {
@@ -49,14 +52,43 @@ export class Game {
         requestAnimationFrame(this.loop.bind(this));
     }
 
+    initTutorial() {
+        const modal = document.getElementById("tutorial-modal");
+        modal.style.display = "flex";
+
+        // Mobile tap to close tutorial
+        modal.addEventListener("click", () => {
+            if (this.gameState === "TUTORIAL") {
+                this.closeTutorial();
+            }
+        });
+    }
+
+    closeTutorial() {
+        document.getElementById("tutorial-modal").style.display = "none";
+        this.gameState = "MAP";
+    }
+
     update(deltaTime) {
         const prevKeys = this.cursor.prevKeys;
         const keys = this.cursor.keys;
 
-        // Freeze cursor/units if in MENU or ENEMY_TURN
-        if (this.gameState !== "MENU" && this.turn === "player") {
-            this.cursor.update(deltaTime);
+        // Global Confirm for Tutorial
+        if (this.gameState === "TUTORIAL") {
+            if (keys.z && !prevKeys.z) {
+                this.closeTutorial();
+            }
+            this.cursor.prevKeys = { ...this.cursor.keys };
+            return;
         }
+
+        // Freeze cursor/units if in MENU, FORECAST or ENEMY_TURN
+        if (this.gameState === "MAP" || this.gameState === "UNIT_MOVE") {
+            if (this.turn === "player") {
+                this.cursor.update(deltaTime);
+            }
+        }
+
         this.units.forEach(unit => unit.update(deltaTime));
 
         // Input Handling only during Player Turn
@@ -129,7 +161,7 @@ export class Game {
             } else if (action === "attack") {
                 this.menu.hide();
                 this.gameState = "UNIT_ATTACK";
-                // Highlight attackable squares logic could go here or in draw
+                // UNIT_ATTACK allows selecting a target
             }
         } else if (this.gameState === "UNIT_ATTACK") {
             // Check if cursor is on an enemy in range
@@ -140,9 +172,14 @@ export class Game {
             );
 
             if (enemy) {
-                this.executeCombat(this.selectedUnit, enemy);
-                this.finishAction();
+                this.targetUnit = enemy;
+                this.showCombatForecast(this.selectedUnit, enemy);
             }
+        } else if (this.gameState === "FORECAST") {
+            // Confirm Attack
+            document.getElementById("combat-forecast").classList.add("hidden");
+            this.executeCombat(this.selectedUnit, this.targetUnit);
+            this.finishAction();
         }
     }
 
@@ -170,24 +207,126 @@ export class Game {
                 { label: "Attack", value: "attack" },
                 { label: "Wait", value: "wait" }
             ]);
+        } else if (this.gameState === "FORECAST") {
+            // Close forecast, go back to UNIT_ATTACK (selecting target)
+            document.getElementById("combat-forecast").classList.add("hidden");
+            this.gameState = "UNIT_ATTACK";
+            this.targetUnit = null;
+        }
+    }
+
+    calculateCombatStats(attacker, defender) {
+        // FETH/FE formulas (Approx)
+        // Dmg = Str - Def
+        // Hit = Dex * 2 + Luck
+        // Avo = Spd * 2 + Luck + TerrainBonus (simplified to 20 for forest)
+        // Crit = (Dex + Luk) / 2
+
+        const terrain = this.map.getTerrain(defender.x, defender.y);
+        const terrainAvo = (terrain === 1) ? 20 : 0;
+        const terrainDef = (terrain === 1) ? 1 : 0;
+
+        const dmg = Math.max(0, attacker.str - (defender.def + terrainDef));
+        const hit = Math.min(100, Math.max(0, (attacker.dex * 3 + attacker.luk) - (defender.spd * 2 + defender.luk + terrainAvo)));
+        const crit = Math.max(0, Math.floor((attacker.dex + attacker.luk) / 2) - defender.luk);
+
+        const double = (attacker.spd - defender.spd) >= 4;
+
+        return { dmg, hit, crit, double };
+    }
+
+    showCombatForecast(attacker, defender) {
+        this.gameState = "FORECAST";
+        const ui = document.getElementById("combat-forecast");
+        ui.classList.remove("hidden");
+
+        const pStats = this.calculateCombatStats(attacker, defender);
+        const eStats = this.calculateCombatStats(defender, attacker); // Counter
+
+        document.getElementById("forecast-attacker-name").innerText = attacker.name;
+        document.getElementById("forecast-defender-name").innerText = defender.name;
+
+        // Player Stats
+        document.getElementById("f-atk-hp").innerText = attacker.hp;
+        let resHp = Math.max(0, defender.hp - (pStats.double ? pStats.dmg * 2 : pStats.dmg)); // Simple forecast logic
+        // Actually forecast should show result of just this combat round
+        // Let's keep it simple: Attacker Dmg -> Defender HP
+
+        document.getElementById("f-atk-mt").innerText = pStats.dmg + (pStats.double ? " x2" : "");
+        document.getElementById("f-atk-hit").innerText = pStats.hit;
+        document.getElementById("f-atk-crit").innerText = pStats.crit;
+
+        // Resulting HP (Estimated)
+        // If Player hits (assume hit for forecast visual), Defender HP drops
+        const estDmg = pStats.dmg * (pStats.double ? 2 : 1);
+        document.getElementById("f-def-res-hp").innerText = Math.max(0, defender.hp - estDmg);
+
+        // Enemy Stats (Counter)
+        const canCounter = true; // Range check usually here but 1 range always true
+        if (canCounter) {
+            document.getElementById("f-def-hp").innerText = defender.hp;
+            document.getElementById("f-def-mt").innerText = eStats.dmg + (eStats.double ? " x2" : "");
+            document.getElementById("f-def-hit").innerText = eStats.hit;
+            document.getElementById("f-def-crit").innerText = eStats.crit;
+
+            const estCounterDmg = eStats.dmg * (eStats.double ? 2 : 1);
+            document.getElementById("f-atk-res-hp").innerText = Math.max(0, attacker.hp - estCounterDmg);
         }
     }
 
     executeCombat(attacker, defender) {
         console.log(`${attacker.name} attacks ${defender.name}!`);
 
-        // Basic damage calc
-        const dmg = Math.max(0, attacker.str - defender.def);
-        defender.hp -= dmg;
-        console.log(`Damage: ${dmg}, ${defender.name} HP: ${defender.hp}`);
+        const pStats = this.calculateCombatStats(attacker, defender);
+        const eStats = this.calculateCombatStats(defender, attacker);
 
-        // Counter attack logic would go here
+        // Attack Sequence: Attacker -> Defender(Counter) -> Attacker(Double) -> Defender(Double)
+        // Simplified: Attacker -> Check Death -> Defender -> Check Death -> Doubles
 
-        // Check death
-        if (defender.hp <= 0) {
-            console.log(`${defender.name} defeated!`);
-            this.units = this.units.filter(u => u !== defender);
+        const performAttack = (atk, def, stats) => {
+            // Hit Check
+            if (Math.random() * 100 < stats.hit) {
+                // Crit Check
+                let finalDmg = stats.dmg;
+                let isCrit = false;
+                if (Math.random() * 100 < stats.crit) {
+                    finalDmg *= 3;
+                    isCrit = true;
+                    console.log("CRITICAL HIT!");
+                }
+
+                def.hp -= finalDmg;
+                if (def.hp < 0) def.hp = 0;
+                console.log(`${atk.name} hits for ${finalDmg}${isCrit ? "(Crit)" : ""}. ${def.name} HP: ${def.hp}`);
+            } else {
+                console.log(`${atk.name} Missed!`);
+            }
+        };
+
+        // 1. Attacker attacks
+        performAttack(attacker, defender, pStats);
+        if (defender.hp <= 0) return this.handleDeath(defender);
+
+        // 2. Defender counters
+        performAttack(defender, attacker, eStats);
+        if (attacker.hp <= 0) return this.handleDeath(attacker);
+
+        // 3. Attacker Double
+        if (pStats.double) {
+            performAttack(attacker, defender, pStats);
+            if (defender.hp <= 0) return this.handleDeath(defender);
         }
+
+        // 4. Defender Double
+        if (eStats.double) {
+            performAttack(defender, attacker, eStats);
+            if (attacker.hp <= 0) return this.handleDeath(attacker);
+        }
+    }
+
+    handleDeath(unit) {
+        console.log(`${unit.name} defeated!`);
+        this.units = this.units.filter(u => u !== unit);
     }
 
     finishAction() {

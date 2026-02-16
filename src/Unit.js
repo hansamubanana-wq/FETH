@@ -8,8 +8,12 @@ export class Unit {
         this.hp = 20;
         this.maxHp = 20;
         this.str = 5;
-        this.def = 2;
-        this.spd = 4;
+        this.mag = 0;
+        this.dex = 5; // Hit
+        this.spd = 4; // Avoid / Double
+        this.luk = 4; // Crit Avoid
+        this.def = 2; // Phys Def
+        this.res = 2; // Mag Def
         this.move = 5; // Default movement ranage
     }
 
