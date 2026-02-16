@@ -6,18 +6,23 @@ body {
     justify-content: center;
     align-items: center;
     height: 100vh;
+    width: 100vw;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     color: white;
+    overflow: hidden;
+    /* Lock scroll */
+    position: fixed;
+    /* Lock scroll for iOS */
 }
 
 #game-container {
     position: relative;
     width: 100%;
-    max-width: 960px;
-    aspect-ratio: 3/2;
+    height: 100%;
+    /* removed max-width and aspect-ratio to fill screen */
     background-color: #000;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-    margin: 0 auto;
+    box-shadow: none;
+    margin: 0;
 }
 
 canvas {
@@ -265,12 +270,34 @@ canvas {
     padding: 0 40px;
 }
 
-.forecast-footer {
-    text-align: center;
-    font-size: 14px;
-    color: #888;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 5px;
+/* Compact Forecast for Mobile */
+@media (max-width: 600px) {
+    #combat-forecast {
+        height: 130px;
+    }
+
+    .forecast-header {
+        font-size: 16px;
+        padding: 5px 10px;
+    }
+
+    .forecast-stats th {
+        font-size: 10px;
+    }
+
+    .forecast-stats td {
+        font-size: 16px;
+    }
+
+    .vs-divider {
+        font-size: 18px;
+        padding: 0 10px;
+    }
+
+    .forecast-footer {
+        font-size: 12px;
+        padding: 2px;
+    }
 }
 
 

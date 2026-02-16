@@ -12,8 +12,10 @@ export class Game {
         this.height = canvas.height;
 
         this.tileSize = 32; // 32x32 pixel tiles
-        this.rows = 20;
-        this.cols = 30;
+
+        // Dynamic Map Size
+        this.cols = Math.ceil(this.width / this.tileSize);
+        this.rows = Math.ceil(this.height / this.tileSize);
 
         this.map = new Map(this.cols, this.rows, this.tileSize);
         this.cursor = new Cursor(this);
