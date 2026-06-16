@@ -1,135 +1,74 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fire Emblem: Three Houses Style Game</title>
+    <title>みんなで競馬ゲーム</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <div id="game-container">
-        <canvas id="game-canvas" width="960" height="640"></canvas>
-        <div id="ui-layer">
-            <!-- UI elements will be injected here -->
-            <div id="cursor-info" class="panel hidden">
-                <h3 id="cursor-name">Terrain</h3>
-                <p id="cursor-details">Def: 0, Avo: 0</p>
-            </div>
+    <div id="app">
+        <!-- スタート画面 -->
+        <section id="screen-setup" class="screen active">
+            <h1>🐎 みんなで競馬</h1>
+            <p class="subtitle">一台でみんなで遊べる、お金をかけない競馬ゲーム</p>
 
-            <div id="unit-info" class="panel hidden">
-                <h3 id="unit-name">Unit Name</h3>
-                <div class="stats-row">
-                    <span>HP: <span id="unit-hp">20/20</span></span>
-                    <span>Lvl: <span id="unit-lvl">1</span></span>
-                </div>
-            </div>
-
-            <div id="action-menu" class="menu hidden">
-                <ul>
-                    <li data-action="attack">Attack</li>
-                    <li data-action="item">Item</li>
-                    <li data-action="wait">Wait</li>
-                </ul>
-            </div>
-
-            <!-- Tutorial Modal -->
-            <div id="tutorial-modal">
-                <div class="modal-content">
-                    <h2>戦闘開始 - Mission Start</h2>
-                    <p><strong>目的 (Objective):</strong> 敵をすべて撃破せよ</p>
-                    <p><strong>操作方法 (Controls):</strong></p>
-                    <ul>
-                        <li><strong>移動/カーソル (Move):</strong> 矢印キー / D-Pad</li>
-                        <li><strong>決定 (Confirm):</strong> Z / A Button</li>
-                        <li><strong>キャンセル (Cancel):</strong> X / B Button</li>
-                    </ul>
-                    <p><strong>ヒント:</strong> 森(Forest)は回避(Avo)と守備(Def)が上がります。</p>
-                    <div class="close-instruction">Press 'Z' or Tap to Start</div>
-                </div>
-            </div>
-
-            <!-- Combat Forecast -->
-            <div id="combat-forecast" class="hidden">
-                <div class="forecast-header">
-                    <span id="forecast-attacker-name">Byleth</span>
-                    <span id="forecast-defender-name">Bandit</span>
-                </div>
-                <div class="forecast-body">
-                    <!-- Attacker Stats -->
-                    <div class="forecast-stats left">
-                        <table>
-                            <tr>
-                                <th>HP</th>
-                                <td><span id="f-atk-hp">20</span> -> <span id="f-atk-res-hp">20</span></td>
-                            </tr>
-                            <tr>
-                                <th>Mt</th>
-                                <td id="f-atk-mt">12</td>
-                            </tr>
-                            <tr>
-                                <th>Hit</th>
-                                <td id="f-atk-hit">100</td>
-                            </tr>
-                            <tr>
-                                <th>Crit</th>
-                                <td id="f-atk-crit">0</td>
-                            </tr>
-                        </table>
+            <div class="card">
+                <label class="field">
+                    <span>プレイヤー人数</span>
+                    <div class="counter">
+                        <button type="button" id="player-minus">−</button>
+                        <output id="player-count">2</output>
+                        <button type="button" id="player-plus">＋</button>
                     </div>
+                </label>
 
-                    <div class="vs-divider">VS</div>
-
-                    <!-- Defender Stats -->
-                    <div class="forecast-stats right">
-                        <table>
-                            <tr>
-                                <th>HP</th>
-                                <td><span id="f-def-hp">20</span> -> <span id="f-def-res-hp">15</span></td>
-                            </tr>
-                            <tr>
-                                <th>Mt</th>
-                                <td id="f-def-mt">8</td>
-                            </tr>
-                            <tr>
-                                <th>Hit</th>
-                                <td id="f-def-hit">85</td>
-                            </tr>
-                            <tr>
-                                <th>Crit</th>
-                                <td id="f-def-crit">0</td>
-                            </tr>
-                        </table>
+                <label class="field">
+                    <span>出走する馬の数</span>
+                    <div class="counter">
+                        <button type="button" id="horse-minus">−</button>
+                        <output id="horse-count">6</output>
+                        <button type="button" id="horse-plus">＋</button>
                     </div>
-                </div>
-                <div class="forecast-footer">
-                    Z: Attack | X: Back
-                </div>
-            </div>
-        </div>
+                </label>
 
-        <!-- Virtual Controls for Mobile -->
-        <div id="virtual-controls" class="hidden-force">
-            <div class="dpad">
-                <div class="dpad-row">
-                    <button id="dpad-up" class="control-btn">▲</button>
-                </div>
-                <div class="dpad-row">
-                    <button id="dpad-left" class="control-btn">◀</button>
-                    <div class="dpad-center"></div>
-                    <button id="dpad-right" class="control-btn">▶</button>
-                </div>
-                <div class="dpad-row">
-                    <button id="dpad-down" class="control-btn">▼</button>
-                </div>
+                <button id="to-pick" class="primary">馬を選ぶ →</button>
             </div>
-            <div class="action-buttons">
-                <button id="btn-b" class="control-btn action-btn cancel">B</button>
-                <button id="btn-a" class="control-btn action-btn confirm">A</button>
+            <p class="hint">同じ画面を順番にまわして、各プレイヤーが応援する馬を選びます。</p>
+        </section>
+
+        <!-- 馬選び画面 -->
+        <section id="screen-pick" class="screen">
+            <h2 id="pick-title">プレイヤー1 の番</h2>
+            <p class="subtitle">応援する馬を選んでください</p>
+            <label class="field name-field">
+                <span>あなたの名前（任意）</span>
+                <input id="player-name" type="text" maxlength="10" placeholder="プレイヤー1">
+            </label>
+            <div id="horse-choices" class="horse-grid"></div>
+        </section>
+
+        <!-- レース画面 -->
+        <section id="screen-race" class="screen">
+            <div id="race-status">よーい…</div>
+            <canvas id="track" width="960" height="540"></canvas>
+            <button id="start-race" class="primary">スタート！</button>
+        </section>
+
+        <!-- 結果画面 -->
+        <section id="screen-result" class="screen">
+            <h2>🏁 結果発表</h2>
+            <ol id="result-list" class="result-list"></ol>
+            <div id="winners" class="winners"></div>
+            <div class="result-buttons">
+                <button id="rematch" class="primary">同じメンバーでもう一度</button>
+                <button id="back-to-setup" class="ghost">最初から</button>
             </div>
-        </div>
+        </section>
     </div>
+
     <script type="module" src="src/main.js"></script>
 </body>
 
