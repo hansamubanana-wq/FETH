@@ -22,17 +22,16 @@ export function drawHorses(n) {
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool.slice(0, n).map((h, i) => {
-        // 基礎能力。少しばらつかせて「強い馬・弱い馬」を作る。
-        const power = 0.85 + Math.random() * 0.3;
+        // 基礎能力。幅を広く取って「強い馬・弱い馬」をはっきりさせる。
+        // 0.70 〜 1.55 程度。差が大きいほどオッズの差も大きくなる。
+        const power = 0.70 + Math.random() * 0.85;
         return {
             id: i,
             name: h.name,
             emoji: h.emoji,
             color: h.color,
             power,
-            // オッズは強さの逆数っぽい見せかけの数値
-            odds: (1 / (power - 0.6) * 1.2).toFixed(1),
-            backers: [], // この馬を選んだプレイヤー名
+            backers: [], // この馬に賭けたプレイヤー名
         };
     });
 }
