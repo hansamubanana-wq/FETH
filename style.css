@@ -22,6 +22,10 @@ body {
     background: radial-gradient(circle at top, var(--bg2), var(--bg));
     color: var(--text);
     font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    /* ズーム・拡大の抑止 */
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 #app {

@@ -2,15 +2,32 @@ import { drawHorses } from "./horses.js";
 import { Race, simulateOrder } from "./race.js";
 import { buildBetTypes, evalOdds } from "./bets.js";
 
+// ---- ズーム禁止 ----
+// iOSのピンチズーム
+document.addEventListener("gesturestart", (e) => e.preventDefault());
+document.addEventListener("gesturechange", (e) => e.preventDefault());
+// PCのCtrl+ホイール、Ctrl + / -
+document.addEventListener("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && ["+", "-", "=", "_"].includes(e.key)) e.preventDefault();
+});
+// ダブルタップズーム
+let lastTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd < 300) e.preventDefault();
+    lastTouchEnd = now;
+}, { passive: false });
+
 const MIN_PLAYERS = 1, MAX_PLAYERS = 8;
-const MIN_HORSES = 2, MAX_HORSES = 12;
+const NUM_HORSES = 8; // 出走頭数は8頭固定
 const FUNDS_MIN = 500, FUNDS_MAX = 5000, FUNDS_STEP = 100;
 const BET_STEP = 100;
 const SIM_RUNS = 3000; // オッズ算出用のシミュレーション回数
 
 const state = {
     numPlayers: 2,
-    numHorses: 6,
+    numHorses: NUM_HORSES,
     startingFunds: 1000,
     horses: [],
     players: [],       // { name, balance } ラウンドをまたいで持ち越す
@@ -48,7 +65,6 @@ function setupCounter(outputId, minusId, plusId, key, min, max, step) {
 }
 
 setupCounter("player-count", "player-minus", "player-plus", "numPlayers", MIN_PLAYERS, MAX_PLAYERS, 1);
-setupCounter("horse-count", "horse-minus", "horse-plus", "numHorses", MIN_HORSES, MAX_HORSES, 1);
 setupCounter("funds-count", "funds-minus", "funds-plus", "startingFunds", FUNDS_MIN, FUNDS_MAX, FUNDS_STEP);
 
 // ---- セットアップ → ベット ----
