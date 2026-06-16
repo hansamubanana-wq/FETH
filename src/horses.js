@@ -34,9 +34,9 @@ export function drawHorses(n, rng = Math.random) {
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool.slice(0, n).map((h, i) => {
-        // 基礎能力。幅を広く取って「強い馬・弱い馬」をはっきりさせる。
-        // 0.70 〜 1.55 程度。差が大きいほどオッズの差も大きくなる。
-        const power = 0.70 + rng() * 0.85;
+        // 基礎能力。馬ごとの差を出しつつ、開きすぎないよう幅は控えめに。
+        // 0.90 〜 1.18 程度。レースごとの「調子」も加わるので接戦になりやすい。
+        const power = 0.90 + rng() * 0.28;
         const style = STYLES[STYLE_KEYS[Math.floor(rng() * STYLE_KEYS.length)]];
         return {
             id: i,

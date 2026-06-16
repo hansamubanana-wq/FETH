@@ -1,8 +1,8 @@
 // レースの基礎パラメータ。事前計算シミュレーションと再生で共有する。
 const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
-const SPEED_NOISE = 135;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
+const SPEED_NOISE = 110;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
 const TRACK_LEN = 820;    // 1周の距離（内部単位）
-const FORM_SPREAD = 0.55; // レースごとの「調子」のばらつき(±55%)
+const FORM_SPREAD = 0.34; // レースごとの「調子」のばらつき(±34%)
 const SIM_DT = 1 / 60;    // 事前計算の固定タイムステップ(s)
 const RACE_DURATION = 40; // 再生にかける秒数（演出尺。結果・オッズには影響しない）
 
@@ -102,6 +102,8 @@ export class Race {
         this._raf = null;
         this._startWall = 0;
         this._dist = horses.map(() => 0); // 各馬の走行距離(0..TRACK_LEN)
+        // 1着馬がゴールするまでのシミュ時間。これを RACE_DURATION 秒で再生する
+        this.winnerTime = raceData.finishTime[raceData.order[0]];
     }
 
     start() {
@@ -116,17 +118,22 @@ export class Race {
     _loop(now) {
         const elapsed = (now - this._startWall) / 1000;
         const { frames } = this.data;
-        const total = frames.length - 1;
+        const last = frames.length - 1;
+        // 1着馬が RACE_DURATION 秒でゴールするようにシミュ時間へ変換する
         const progress = Math.min(1, elapsed / RACE_DURATION);
-        const fpos = progress * total;
+        const simT = progress * this.winnerTime;
+        const fpos = Math.min(last, simT / this.data.dt);
         const f0 = Math.floor(fpos);
-        const done = progress >= 1;
+        const f1 = Math.min(last, f0 + 1);
+        const alpha = fpos - f0;
+        for (let i = 0; i < this.horses.length; i++) {
+            this._dist[i] = frames[f0][i] + (frames[f1][i] - frames[f0][i]) * alpha;
+        }
+        this._draw(elapsed);
+        if (this.onTick) this.onTick(this._currentOrder());
 
-        if (done) {
-            const last = frames[frames.length - 1];
-            for (let i = 0; i < this.horses.length; i++) this._dist[i] = last[i];
-            this._draw(elapsed);
-            if (this.onTick) this.onTick(this._currentOrder());
+        if (progress >= 1) {
+            // 1着馬がゴール。他馬は走行中のまま結果へ
             if (this.onFinish) {
                 const cb = this.onFinish;
                 this.onFinish = null;
@@ -134,14 +141,6 @@ export class Race {
             }
             return;
         }
-
-        const f1 = f0 + 1;
-        const alpha = fpos - f0;
-        for (let i = 0; i < this.horses.length; i++) {
-            this._dist[i] = frames[f0][i] + (frames[f1][i] - frames[f0][i]) * alpha;
-        }
-        this._draw(elapsed);
-        if (this.onTick) this.onTick(this._currentOrder());
         this._raf = requestAnimationFrame((t) => this._loop(t));
     }
 
