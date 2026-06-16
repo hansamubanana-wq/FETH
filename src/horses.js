@@ -14,7 +14,18 @@ export const HORSE_POOL = [
     { name: "モリノセンシ", emoji: "🐎", color: "#aed581" },
 ];
 
-// 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)を付与。
+// 脚質。profile(t) は進行度 t(0=スタート,1=ゴール) に対する速度倍率。
+// どの脚質も平均は約1.0になるよう設計し、得意なタイミングが違うだけにしてある。
+// → 逃げ馬が粘るか、差し馬が最後に届くか、で展開と写真判定が生まれる。
+export const STYLES = {
+    nige: { key: "nige", label: "逃げ", desc: "前半からリードを奪う", profile: (t) => 1.20 - 0.40 * t },
+    senko: { key: "senko", label: "先行", desc: "前めにつけて押し切る", profile: (t) => 1.10 - 0.20 * t },
+    sashi: { key: "sashi", label: "差し", desc: "後半に伸びてくる", profile: (t) => 0.90 + 0.20 * t },
+    oikomi: { key: "oikomi", label: "追込", desc: "最後方から大外一気", profile: (t) => 0.78 + 0.44 * t },
+};
+const STYLE_KEYS = Object.keys(STYLES);
+
+// 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)と脚質を付与。
 export function drawHorses(n) {
     const pool = [...HORSE_POOL];
     for (let i = pool.length - 1; i > 0; i--) {
@@ -22,17 +33,18 @@ export function drawHorses(n) {
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool.slice(0, n).map((h, i) => {
-        // 基礎能力。少しばらつかせて「強い馬・弱い馬」を作る。
-        const power = 0.85 + Math.random() * 0.3;
+        // 基礎能力。幅を広く取って「強い馬・弱い馬」をはっきりさせる。
+        // 0.70 〜 1.55 程度。差が大きいほどオッズの差も大きくなる。
+        const power = 0.70 + Math.random() * 0.85;
+        const style = STYLES[STYLE_KEYS[Math.floor(Math.random() * STYLE_KEYS.length)]];
         return {
             id: i,
             name: h.name,
             emoji: h.emoji,
             color: h.color,
             power,
-            // オッズは強さの逆数っぽい見せかけの数値
-            odds: (1 / (power - 0.6) * 1.2).toFixed(1),
-            backers: [], // この馬を選んだプレイヤー名
+            style,
+            backers: [], // この馬に賭けたプレイヤー名
         };
     });
 }

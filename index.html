@@ -58,6 +58,12 @@
                 <input id="player-name" type="text" maxlength="10" placeholder="プレイヤー1">
             </label>
 
+            <div class="field">
+                <span>賭けの種類</span>
+                <div id="bettype-tabs" class="bettype-tabs"></div>
+                <p id="bettype-desc" class="bettype-desc"></p>
+            </div>
+
             <div class="field bet-field">
                 <span>かけるコイン</span>
                 <div class="counter">
@@ -66,20 +72,32 @@
                     <button type="button" id="bet-plus">＋</button>
                 </div>
                 <div class="bet-quick">
-                    <button type="button" data-bet="0">かけない</button>
                     <button type="button" data-bet="half">半分</button>
                     <button type="button" data-bet="all">全部</button>
                 </div>
             </div>
 
-            <p class="subtitle">↓ 賭ける馬をタップ</p>
+            <p class="subtitle" id="pick-instruction">↓ 賭ける馬をタップ</p>
+            <div id="selection-bar" class="selection-bar"></div>
+            <div id="odds-preview" class="odds-preview hidden"></div>
             <div id="horse-choices" class="horse-grid"></div>
+            <div class="pick-actions">
+                <button id="confirm-bet" class="primary hidden">この内容で賭ける</button>
+                <button id="skip-bet" class="ghost">賭けずに次の人へ</button>
+            </div>
         </section>
 
         <!-- レース画面 -->
         <section id="screen-race" class="screen">
             <div id="race-status">よーい…</div>
-            <canvas id="track" width="960" height="540"></canvas>
+            <div class="race-stage">
+                <canvas id="track" width="960" height="540"></canvas>
+                <div id="flash" class="flash"></div>
+                <div id="photo-overlay" class="photo-overlay hidden">
+                    <div class="photo-line"></div>
+                    <span class="photo-text">📷 写真判定中…</span>
+                </div>
+            </div>
             <button id="start-race" class="primary">スタート！</button>
         </section>
 
