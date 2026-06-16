@@ -13,7 +13,7 @@
         <!-- スタート画面 -->
         <section id="screen-setup" class="screen active">
             <h1>🐎 みんなで競馬</h1>
-            <p class="subtitle">一台でみんなで遊べる、お金をかけない競馬ゲーム</p>
+            <p class="subtitle">一台でみんなで遊べる、ゲーム内コインを賭ける競馬ゲーム</p>
 
             <div class="card">
                 <label class="field">
@@ -34,19 +34,45 @@
                     </div>
                 </label>
 
-                <button id="to-pick" class="primary">馬を選ぶ →</button>
+                <label class="field">
+                    <span>初期コイン</span>
+                    <div class="counter">
+                        <button type="button" id="funds-minus">−</button>
+                        <output id="funds-count">1000</output>
+                        <button type="button" id="funds-plus">＋</button>
+                    </div>
+                </label>
+
+                <button id="to-pick" class="primary">馬に賭ける →</button>
             </div>
-            <p class="hint">同じ画面を順番にまわして、各プレイヤーが応援する馬を選びます。</p>
+            <p class="hint">同じ画面を順番にまわして、各プレイヤーが賭ける馬とコインを決めます。同じ馬に賭けてもOK。</p>
         </section>
 
-        <!-- 馬選び画面 -->
+        <!-- 馬選び・ベット画面 -->
         <section id="screen-pick" class="screen">
             <h2 id="pick-title">プレイヤー1 の番</h2>
-            <p class="subtitle">応援する馬を選んでください</p>
-            <label class="field name-field">
+            <div class="balance-bar">残高 <b><span id="pick-balance">1000</span></b> コイン</div>
+
+            <label class="field name-field" id="name-wrap">
                 <span>あなたの名前（任意）</span>
                 <input id="player-name" type="text" maxlength="10" placeholder="プレイヤー1">
             </label>
+
+            <div class="field bet-field">
+                <span>かけるコイン</span>
+                <div class="counter">
+                    <button type="button" id="bet-minus">−</button>
+                    <output id="bet-amount">100</output>
+                    <button type="button" id="bet-plus">＋</button>
+                </div>
+                <div class="bet-quick">
+                    <button type="button" data-bet="0">かけない</button>
+                    <button type="button" data-bet="half">半分</button>
+                    <button type="button" data-bet="all">全部</button>
+                </div>
+            </div>
+
+            <p class="subtitle">↓ 賭ける馬をタップ</p>
             <div id="horse-choices" class="horse-grid"></div>
         </section>
 
@@ -61,10 +87,13 @@
         <section id="screen-result" class="screen">
             <h2>🏁 結果発表</h2>
             <ol id="result-list" class="result-list"></ol>
-            <div id="winners" class="winners"></div>
+            <h3 class="section-title">払い戻し</h3>
+            <div id="payouts" class="payouts"></div>
+            <h3 class="section-title">所持コイン順位</h3>
+            <ol id="standings" class="standings"></ol>
             <div class="result-buttons">
                 <button id="rematch" class="primary">同じメンバーでもう一度</button>
-                <button id="back-to-setup" class="ghost">最初から</button>
+                <button id="back-to-setup" class="ghost">最初から（残高リセット）</button>
             </div>
         </section>
     </div>

@@ -171,6 +171,107 @@ button.ghost {
     margin-top: 10px;
 }
 
+/* ベット */
+.balance-bar {
+    text-align: center;
+    font-size: 1.2rem;
+    margin: 6px 0 4px;
+    color: var(--text);
+}
+
+.balance-bar b {
+    color: var(--accent);
+    font-size: 1.5rem;
+}
+
+.bet-field {
+    max-width: 480px;
+    margin: 10px auto 16px;
+}
+
+.bet-quick {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.bet-quick button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--muted);
+    background: var(--bg2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+
+.bet-quick button:active {
+    transform: scale(0.96);
+}
+
+.section-title {
+    text-align: center;
+    margin: 24px 0 8px;
+    color: var(--muted);
+}
+
+.payouts {
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.payout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+}
+
+.payout-row .who {
+    font-weight: 700;
+}
+
+.payout-row .detail {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.payout-row .delta.win {
+    color: #66d97a;
+    font-weight: 700;
+}
+
+.payout-row .delta.lose {
+    color: #ff8a80;
+    font-weight: 700;
+}
+
+.standings {
+    max-width: 520px;
+    margin: 8px auto 24px;
+    padding: 0;
+    list-style: none;
+}
+
+.standings li {
+    display: flex;
+    justify-content: space-between;
+    background: var(--bg2);
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 8px;
+}
+
+.standings .coins {
+    color: var(--accent);
+    font-weight: 700;
+}
+
 /* 馬選び */
 .horse-grid {
     display: grid;
