@@ -386,6 +386,17 @@ button.ghost {
     margin-top: 4px;
 }
 
+.horse-pick .style {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg2);
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
 .horse-pick.taken {
     opacity: 0.4;
     cursor: not-allowed;
@@ -408,12 +419,79 @@ button.ghost {
     min-height: 1.2em;
 }
 
+.race-stage {
+    position: relative;
+}
+
 #track {
     width: 100%;
     height: auto;
     border-radius: 16px;
     display: block;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* カメラフラッシュ */
+.flash {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    border-radius: 16px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.flash.fire {
+    animation: flash 0.55s ease-out;
+}
+
+@keyframes flash {
+    0% { opacity: 0; }
+    12% { opacity: 0.95; }
+    100% { opacity: 0; }
+}
+
+/* 写真判定オーバーレイ */
+.photo-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.photo-overlay .photo-text {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 2px 8px #000;
+    letter-spacing: 0.05em;
+    animation: pulse 0.9s ease-in-out infinite;
+}
+
+.photo-overlay .photo-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 3px;
+    background: repeating-linear-gradient(#fff 0 8px, #111 8px 16px);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+    animation: scan 1.4s linear infinite;
+}
+
+@keyframes scan {
+    0% { left: 35%; }
+    50% { left: 65%; }
+    100% { left: 35%; }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.85; }
+    50% { transform: scale(1.08); opacity: 1; }
 }
 
 #start-race {
@@ -445,6 +523,17 @@ button.ghost {
     font-weight: 800;
     width: 2.2ch;
     text-align: center;
+}
+
+.result-list li.winner {
+    background: linear-gradient(90deg, rgba(255, 204, 51, 0.28), var(--panel));
+    box-shadow: 0 0 0 2px var(--accent) inset;
+    animation: winglow 1.2s ease-in-out 2;
+}
+
+@keyframes winglow {
+    0%, 100% { box-shadow: 0 0 0 2px var(--accent) inset; }
+    50% { box-shadow: 0 0 18px 2px var(--accent); }
 }
 
 .winners {

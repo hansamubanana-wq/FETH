@@ -163,6 +163,7 @@ function renderHorses() {
             <div class="emoji" style="filter:drop-shadow(0 0 6px ${h.color})">${h.emoji}</div>
             <div class="hname">${h.id + 1}. ${h.name}</div>
             ${oddsLine}
+            <div class="style" title="${h.style.desc}">${h.style.label}</div>
         `;
         div.addEventListener("click", () => tapHorse(h));
         grid.appendChild(div);
@@ -304,6 +305,8 @@ function goToRace() {
     const canvas = document.getElementById("track");
     state.race = new Race(canvas, state.horses);
     state.race._draw();
+    document.getElementById("photo-overlay").classList.add("hidden");
+    document.getElementById("flash").classList.remove("fire");
     document.getElementById("race-status").textContent = "よーい…";
     const startBtn = document.getElementById("start-race");
     startBtn.disabled = false;
@@ -328,11 +331,44 @@ document.getElementById("start-race").addEventListener("click", () => {
 });
 
 function runRace() {
+    const status = document.getElementById("race-status");
+    state.race.onTick = (leader) => {
+        if (leader) status.textContent = `🏇 先頭: ${leader.name}`;
+    };
     state.race.onFinish = (orderedHorses) => {
-        document.getElementById("race-status").textContent = "ゴール！";
-        setTimeout(() => showResult(orderedHorses), 900);
+        state.race.onTick = null;
+        const gap = state.race.finishGap();
+        if (gap < 0.16) {
+            photoFinish(orderedHorses);
+        } else {
+            status.textContent = `ゴール！ 1着 ${orderedHorses[0].name}`;
+            setTimeout(() => showResult(orderedHorses), 1300);
+        }
     };
     state.race.start();
+}
+
+// 接戦時の写真判定演出。
+function photoFinish(orderedHorses) {
+    const status = document.getElementById("race-status");
+    const flash = document.getElementById("flash");
+    const overlay = document.getElementById("photo-overlay");
+
+    // カメラのフラッシュ
+    flash.classList.remove("fire");
+    void flash.offsetWidth; // リフローで再生をリセット
+    flash.classList.add("fire");
+
+    status.textContent = "📷 写真判定…";
+    overlay.classList.remove("hidden");
+
+    setTimeout(() => {
+        overlay.classList.add("hidden");
+        const w = orderedHorses[0];
+        const second = orderedHorses[1];
+        status.textContent = `📷 判定の結果… 1着 ${w.name}！（${second.name} を差し切り）`;
+        setTimeout(() => showResult(orderedHorses), 1600);
+    }, 2400);
 }
 
 // ---- 結果画面 ----
@@ -346,10 +382,11 @@ function showResult(orderedHorses) {
     const medals = ["🥇", "🥈", "🥉"];
     orderedHorses.forEach((h, i) => {
         const li = document.createElement("li");
+        if (i === 0) li.classList.add("winner");
         li.innerHTML = `
             <span class="rank">${medals[i] || i + 1}</span>
             <span class="emoji" style="filter:drop-shadow(0 0 4px ${h.color})">${h.emoji}</span>
-            <span>${h.id + 1}. ${h.name}</span>
+            <span>${h.id + 1}. ${h.name} <small style="color:var(--muted)">(${h.style.label})</small></span>
         `;
         list.appendChild(li);
     });
