@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 競馬ゲームのルーム。お金が絡まないカジュアル用途なので誰でも読み書き可。
+    match /rooms/{code} {
+      allow read, write: if true;
+    }
+  }
+}

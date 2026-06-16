@@ -1,4 +1,4 @@
-// オンライン対戦モード。Firebase Realtime Database でルームを同期する。
+// オンライン対戦モード。Firebase Firestore でルームを同期する。
 // 全端末は horseSeed / raceSeed から決定論的に同じ馬・同じレース映像を作る。
 // Firebase SDK はオンラインに入ったときだけ動的に読み込む（ローカルモードを邪魔しない）。
 import { firebaseConfig } from "./firebase-config.js";
@@ -10,17 +10,18 @@ import { simulateRaceData } from "./race.js";
 import { makeRng } from "./rng.js";
 
 const FB_VER = "10.12.2";
-const configured = !!firebaseConfig.databaseURL;
+const configured = !!firebaseConfig.projectId;
 let fb = null;
 
 async function ensureDb() {
     if (fb) return fb;
     const appMod = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app.js`);
-    const dbMod = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-database.js`);
-    const db = dbMod.getDatabase(appMod.initializeApp(firebaseConfig));
+    const fsMod = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-firestore.js`);
+    const db = fsMod.getFirestore(appMod.initializeApp(firebaseConfig));
     fb = {
-        db, ref: dbMod.ref, set: dbMod.set, update: dbMod.update, get: dbMod.get,
-        onValue: dbMod.onValue, onDisconnect: dbMod.onDisconnect, remove: dbMod.remove,
+        db,
+        doc: fsMod.doc, setDoc: fsMod.setDoc, updateDoc: fsMod.updateDoc,
+        getDoc: fsMod.getDoc, onSnapshot: fsMod.onSnapshot, deleteField: fsMod.deleteField,
     };
     return fb;
 }
@@ -38,7 +39,7 @@ const o = {
     betShownRound: -1, playedRound: -1, settledRound: -1, raceStartedRound: -1, resultShownRound: -1,
 };
 
-function roomRef(path = "") { return fb.ref(fb.db, `rooms/${o.code}${path}`); }
+function roomDoc() { return fb.doc(fb.db, "rooms", o.code); }
 function randomCode() {
     const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let s = "";
@@ -64,11 +65,10 @@ async function createRoom() {
     const funds = clampFunds(parseInt(document.getElementById("create-funds").value, 10));
     o.code = randomCode();
     o.isHost = true;
-    await fb.set(roomRef(), {
+    await fb.setDoc(roomDoc(), {
         host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0,
         players: { [uid]: { name, balance: funds, betDone: false, bet: null } },
     });
-    fb.onDisconnect(roomRef(`/players/${uid}`)).remove();
     subscribe();
 }
 
@@ -78,25 +78,26 @@ async function joinRoom() {
     const name = document.getElementById("join-name").value.trim() || "プレイヤー";
     if (!code) { alert("合言葉を入力してください"); return; }
     o.code = code;
-    const snap = await fb.get(roomRef());
+    const snap = await fb.getDoc(roomDoc());
     if (!snap.exists()) { alert("その合言葉の部屋が見つかりません"); o.code = null; return; }
-    const room = snap.val();
+    const room = snap.data();
     o.isHost = (room.host === uid);
-    await fb.update(roomRef(`/players/${uid}`), { name, balance: room.funds, betDone: false, bet: null });
-    fb.onDisconnect(roomRef(`/players/${uid}`)).remove();
+    await fb.updateDoc(roomDoc(), {
+        [`players.${uid}`]: { name, balance: room.funds, betDone: false, bet: null },
+    });
     subscribe();
 }
 
 function leaveRoom() {
     if (o.unsub) { o.unsub(); o.unsub = null; }
-    if (fb && o.code) fb.remove(roomRef(`/players/${uid}`)).catch(() => {});
+    if (fb && o.code) fb.updateDoc(roomDoc(), { [`players.${uid}`]: fb.deleteField() }).catch(() => {});
     o.code = null; o.room = null; o.isHost = false; o.engine = null; o.engineSeed = null;
     showScreen("screen-online-home");
 }
 
 function subscribe() {
     if (o.unsub) o.unsub();
-    o.unsub = fb.onValue(roomRef(), (snap) => onRoom(snap.val()));
+    o.unsub = fb.onSnapshot(roomDoc(), (snap) => onRoom(snap.exists() ? snap.data() : null));
 }
 
 function clampFunds(v) {
@@ -172,10 +173,10 @@ function hostStartBetting() {
     const round = (o.room.round || 0) + 1;
     const updates = { phase: "betting", round, horseSeed: randomSeed(), raceSeed: 0 };
     Object.keys(o.room.players || {}).forEach((id) => {
-        updates[`players/${id}/betDone`] = false;
-        updates[`players/${id}/bet`] = null;
+        updates[`players.${id}.betDone`] = false;
+        updates[`players.${id}.bet`] = null;
     });
-    fb.update(roomRef(), updates);
+    fb.updateDoc(roomDoc(), updates);
 }
 
 function handleBetting(room) {
@@ -195,7 +196,10 @@ function handleBetting(room) {
     startBetPanel({
         engine: o.engine,
         balance: me.balance,
-        onComplete: (bet) => fb.update(roomRef(`/players/${uid}`), { bet: bet || null, betDone: true }),
+        onComplete: (bet) => fb.updateDoc(roomDoc(), {
+            [`players.${uid}.bet`]: bet || null,
+            [`players.${uid}.betDone`]: true,
+        }),
     });
 }
 
@@ -203,7 +207,7 @@ function handleBetting(room) {
 function hostStartRace(room) {
     if (o.raceStartedRound === room.round) return;
     o.raceStartedRound = room.round;
-    fb.update(roomRef(), { raceSeed: randomSeed(), phase: "race" });
+    fb.updateDoc(roomDoc(), { raceSeed: randomSeed(), phase: "race" });
 }
 
 async function handleRace(room) {
@@ -220,9 +224,9 @@ async function handleRace(room) {
         const updates = { phase: "result" };
         Object.keys(ps).forEach((id) => {
             const res = settleBet(ps[id].bet, orderIds, o.engine.horses, o.engine.byKey);
-            updates[`players/${id}/balance`] = ps[id].balance + res.delta;
+            updates[`players.${id}.balance`] = ps[id].balance + res.delta;
         });
-        await fb.update(roomRef(), updates);
+        await fb.updateDoc(roomDoc(), updates);
     }
     maybeShowResult(o.room);
 }

@@ -1,20 +1,11 @@
 // === Firebase の設定 ===
-// あなたの既存プロジェクトの「ウェブアプリ」設定をここに貼り付けてください。
-// Firebase コンソール → プロジェクトの設定 → マイアプリ（ウェブ）→ SDK の構成 → 「構成」
-// databaseURL（Realtime Database）が必須です。
-//
-// 例:
-// export const firebaseConfig = {
-//   apiKey: "AIza...",
-//   authDomain: "your-project.firebaseapp.com",
-//   databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-//   projectId: "your-project",
-//   appId: "1:1234567890:web:abcdef",
-// };
+// オンライン対戦は Firestore を使います（databaseURL は不要、projectId で動きます）。
 export const firebaseConfig = {
-    apiKey: "",
-    authDomain: "",
-    databaseURL: "",
-    projectId: "",
-    appId: "",
+    apiKey: "AIzaSyDpl-P5UIRp9N4MKyNBq4qPX_Hbepmv9MY",
+    authDomain: "prospia-d5526.firebaseapp.com",
+    projectId: "prospia-d5526",
+    storageBucket: "prospia-d5526.firebasestorage.app",
+    messagingSenderId: "650955633033",
+    appId: "1:650955633033:web:270e8d5757d8e58aa07158",
+    measurementId: "G-6K1ZMYY21D",
 };
