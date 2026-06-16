@@ -1,10 +1,10 @@
 // レースの基礎パラメータ。事前計算シミュレーションと再生で共有する。
 const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
-const SPEED_NOISE = 95;   // 毎フレームの緩急の振れ幅(±)
-const TRACK_LEN = 820;    // スタート〜ゴールの距離(px)
+const SPEED_NOISE = 135;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
+const TRACK_LEN = 820;    // 1周の距離（内部単位）
 const FORM_SPREAD = 0.55; // レースごとの「調子」のばらつき(±55%)
 const SIM_DT = 1 / 60;    // 事前計算の固定タイムステップ(s)
-const RACE_DURATION = 20; // 再生にかける秒数（演出尺。結果・オッズには影響しない）
+const RACE_DURATION = 40; // 再生にかける秒数（演出尺。結果・オッズには影響しない）
 
 // レースごとの実力値。能力(power)にそのレース限定の「調子」を掛ける。
 export function rollPerf(power, rng) {
@@ -71,7 +71,7 @@ export function simulateRaceData(horses, rng) {
     return { dt: SIM_DT, frames, order, finishTime, gap, trackLen: TRACK_LEN };
 }
 
-// 事前計算した raceData を canvas に実時間で再生するプレイヤー。
+// 事前計算した raceData を canvas に実時間で再生するプレイヤー（オーバルコース1周）。
 export class Race {
     constructor(canvas, horses, raceData) {
         this.canvas = canvas;
@@ -80,19 +80,28 @@ export class Race {
         this.data = raceData;
         this.W = canvas.width;
         this.H = canvas.height;
+        const n = horses.length;
 
-        this.startX = 60;
-        this.finishX = this.startX + TRACK_LEN;
-        this.laneTop = 70;
-        this.laneGap = (this.H - this.laneTop - 30) / horses.length;
-        this.laneY = horses.map((h, i) => this.laneTop + this.laneGap * (i + 0.5));
-        this.bobPhase = horses.map(() => Math.random() * Math.PI * 2);
+        // 楕円トラックの形
+        this.cx = this.W / 2;
+        this.cy = this.H / 2;
+        this.rx = 360;          // 中心線の横半径
+        this.ry = 175;          // 中心線の縦半径
+        this.laneGap = 13;
+        this.theta0 = Math.PI / 2; // スタート/ゴールは下（手前の直線）
+        // 各馬のレーン半径オフセット（内・外に振り分け）
+        this.off = horses.map((h, i) => (i - (n - 1) / 2) * this.laneGap);
+        const half = ((n - 1) / 2) * this.laneGap;
+        this.trackOX = this.rx + half + 26;  // トラック外周
+        this.trackOY = this.ry + half + 26;
+        this.trackIX = this.rx - half - 26;  // トラック内周
+        this.trackIY = this.ry - half - 26;
 
         this.onFinish = null;
         this.onTick = null;
         this._raf = null;
         this._startWall = 0;
-        this._xs = horses.map(() => this.startX);
+        this._dist = horses.map(() => 0); // 各馬の走行距離(0..TRACK_LEN)
     }
 
     start() {
@@ -108,20 +117,20 @@ export class Race {
         const elapsed = (now - this._startWall) / 1000;
         const { frames } = this.data;
         const total = frames.length - 1;
-        // 事前計算したレースを RACE_DURATION 秒に引き伸ばして再生する
         const progress = Math.min(1, elapsed / RACE_DURATION);
         const fpos = progress * total;
         const f0 = Math.floor(fpos);
         const done = progress >= 1;
 
         if (done) {
-            // 最終位置に固定して描画
             const last = frames[frames.length - 1];
-            this._xs = last.map((x) => this.startX + x);
+            for (let i = 0; i < this.horses.length; i++) this._dist[i] = last[i];
             this._draw(elapsed);
+            if (this.onTick) this.onTick(this._currentOrder());
             if (this.onFinish) {
-                this.onFinish(this.data.order.map((i) => this.horses[i]));
+                const cb = this.onFinish;
                 this.onFinish = null;
+                cb(this.data.order.map((i) => this.horses[i]));
             }
             return;
         }
@@ -129,77 +138,93 @@ export class Race {
         const f1 = f0 + 1;
         const alpha = fpos - f0;
         for (let i = 0; i < this.horses.length; i++) {
-            const x = frames[f0][i] + (frames[f1][i] - frames[f0][i]) * alpha;
-            this._xs[i] = this.startX + x;
+            this._dist[i] = frames[f0][i] + (frames[f1][i] - frames[f0][i]) * alpha;
         }
         this._draw(elapsed);
-        if (this.onTick) this.onTick(this._leader());
+        if (this.onTick) this.onTick(this._currentOrder());
         this._raf = requestAnimationFrame((t) => this._loop(t));
     }
 
-    _leader() {
-        let best = 0;
-        for (let i = 1; i < this._xs.length; i++) if (this._xs[i] > this._xs[best]) best = i;
-        return this.horses[best];
+    // 現在の走行距離順（先頭→最後）の馬配列
+    _currentOrder() {
+        return this.horses
+            .map((h, i) => i)
+            .sort((a, b) => this._dist[b] - this._dist[a])
+            .map((i) => this.horses[i]);
+    }
+
+    // 距離→画面座標（レーンオフセット込み）
+    _pos(dist, off) {
+        const ang = this.theta0 + 2 * Math.PI * (dist / TRACK_LEN);
+        return {
+            x: this.cx + (this.rx + off) * Math.cos(ang),
+            y: this.cy + (this.ry + off) * Math.sin(ang),
+        };
     }
 
     _draw(elapsed = 0) {
         const ctx = this.ctx;
-        ctx.fillStyle = "#2e7d32";
+        // 芝（背景）
+        ctx.fillStyle = "#1f6b2a";
         ctx.fillRect(0, 0, this.W, this.H);
 
-        for (let i = 0; i < this.horses.length; i++) {
-            const y = this.laneTop + this.laneGap * i;
-            ctx.fillStyle = i % 2 === 0 ? "#388e3c" : "#2e7d32";
-            ctx.fillRect(0, y, this.W, this.laneGap);
-        }
+        // トラック（ダート風のリング）
+        ctx.fillStyle = "#c79a5b";
+        ctx.beginPath();
+        ctx.ellipse(this.cx, this.cy, this.trackOX, this.trackOY, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // 内側の芝でリングをくり抜く
+        ctx.fillStyle = "#2e8b3d";
+        ctx.beginPath();
+        ctx.ellipse(this.cx, this.cy, this.trackIX, this.trackIY, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // ラチ（白線）
+        ctx.strokeStyle = "rgba(255,255,255,0.55)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(this.cx, this.cy, this.trackOX, this.trackOY, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(this.cx, this.cy, this.trackIX, this.trackIY, 0, 0, Math.PI * 2);
+        ctx.stroke();
 
-        this._drawPostLine(this.startX, "#ffffff");
-        this._drawCheckered(this.finishX);
+        // スタート/ゴールライン（市松）
+        this._drawFinishLine();
 
-        for (let i = 0; i < this.horses.length; i++) {
+        // 各馬を距離順に描く（後ろの馬を先に→先頭が上に重なる）
+        const order = this.horses.map((h, i) => i).sort((a, b) => this._dist[a] - this._dist[b]);
+        for (const i of order) {
             const h = this.horses[i];
-            const x = this._xs[i];
-            const bobY = Math.sin(elapsed * 14 + this.bobPhase[i]) * 4;
-            ctx.font = "30px serif";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
+            const p = this._pos(this._dist[i], this.off[i]);
             ctx.beginPath();
             ctx.fillStyle = h.color;
-            ctx.arc(x, this.laneY[i] + bobY, 17, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, 13, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = "#000";
-            ctx.fillText(h.emoji, x, this.laneY[i] + bobY + 1);
-
-            ctx.font = "bold 12px sans-serif";
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "rgba(0,0,0,0.5)";
+            ctx.stroke();
             ctx.fillStyle = "#0d1b2a";
-            ctx.fillText(String(h.id + 1), x - 20, this.laneY[i] + bobY);
-
-            ctx.font = "12px sans-serif";
-            ctx.fillStyle = "#ffffff";
-            ctx.textAlign = "left";
-            ctx.fillText(h.name, 8, this.laneY[i] - this.laneGap / 2 + 12);
+            ctx.font = "bold 13px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(String(h.id + 1), p.x, p.y + 1);
         }
     }
 
-    _drawPostLine(x, color) {
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 3;
-        this.ctx.beginPath();
-        this.ctx.moveTo(x, this.laneTop);
-        this.ctx.lineTo(x, this.H - 30);
-        this.ctx.stroke();
-    }
-
-    _drawCheckered(x) {
+    _drawFinishLine() {
         const ctx = this.ctx;
-        const sq = 10;
-        for (let y = this.laneTop; y < this.H - 30; y += sq) {
-            for (let k = 0; k < 2; k++) {
-                const isBlack = ((Math.floor((y - this.laneTop) / sq) + k) % 2) === 0;
-                ctx.fillStyle = isBlack ? "#111" : "#fff";
-                ctx.fillRect(x + k * sq, y, sq, sq);
-            }
+        const c = Math.cos(this.theta0), s = Math.sin(this.theta0);
+        const inner = { x: this.cx + this.trackIX * c, y: this.cy + this.trackIY * s };
+        const outer = { x: this.cx + this.trackOX * c, y: this.cy + this.trackOY * s };
+        const steps = 8;
+        for (let k = 0; k < steps; k++) {
+            const t0 = k / steps, t1 = (k + 1) / steps;
+            ctx.strokeStyle = k % 2 === 0 ? "#fff" : "#111";
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(inner.x + (outer.x - inner.x) * t0, inner.y + (outer.y - inner.y) * t0);
+            ctx.lineTo(inner.x + (outer.x - inner.x) * t1, inner.y + (outer.y - inner.y) * t1);
+            ctx.stroke();
         }
     }
 }

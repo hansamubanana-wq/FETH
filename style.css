@@ -467,6 +467,89 @@ button.ghost {
     position: relative;
 }
 
+/* レース中のライブ表示 */
+.live-panels {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.live-box {
+    flex: 1 1 240px;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 10px 14px;
+}
+
+.live-box h4 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.live-standings {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.live-standings li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 0.9rem;
+}
+
+.live-standings .lr {
+    width: 1.6em;
+    text-align: center;
+}
+
+.live-standings .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.live-standings .lh {
+    flex-shrink: 0;
+}
+
+.live-standings .who-tag {
+    color: var(--accent);
+    font-size: 0.78rem;
+    margin-left: auto;
+    text-align: right;
+}
+
+.live-pl {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.live-pl li {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.95rem;
+}
+
+.live-pl .delta.win {
+    color: #66d97a;
+    font-weight: 700;
+}
+
+.live-pl .delta.lose {
+    color: #ff8a80;
+    font-weight: 700;
+}
+
 #track {
     width: 100%;
     height: auto;

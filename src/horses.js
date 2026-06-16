@@ -16,12 +16,12 @@ export const HORSE_POOL = [
 
 // 脚質。profile(t) は進行度 t(0=スタート,1=ゴール) に対する速度倍率。
 // どの脚質も平均は約1.0になるよう設計し、得意なタイミングが違うだけにしてある。
-// → 逃げ馬が粘るか、差し馬が最後に届くか、で展開と写真判定が生まれる。
+// 緩急を大きめにして、前半と後半で大きく順位が入れ替わる（追い抜きが激しい）展開にする。
 export const STYLES = {
-    nige: { key: "nige", label: "逃げ", desc: "前半からリードを奪う", profile: (t) => 1.20 - 0.40 * t },
-    senko: { key: "senko", label: "先行", desc: "前めにつけて押し切る", profile: (t) => 1.10 - 0.20 * t },
-    sashi: { key: "sashi", label: "差し", desc: "後半に伸びてくる", profile: (t) => 0.90 + 0.20 * t },
-    oikomi: { key: "oikomi", label: "追込", desc: "最後方から大外一気", profile: (t) => 0.78 + 0.44 * t },
+    nige: { key: "nige", label: "逃げ", desc: "前半で大きくリード", profile: (t) => 1.34 - 0.68 * t },
+    senko: { key: "senko", label: "先行", desc: "前めにつけて押し切る", profile: (t) => 1.16 - 0.32 * t },
+    sashi: { key: "sashi", label: "差し", desc: "後半にぐっと伸びる", profile: (t) => 0.84 + 0.32 * t },
+    oikomi: { key: "oikomi", label: "追込", desc: "最後方から大外一気", profile: (t) => 0.64 + 0.72 * t },
 };
 const STYLE_KEYS = Object.keys(STYLES);
 

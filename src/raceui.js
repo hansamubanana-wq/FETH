@@ -1,13 +1,20 @@
 // レース再生と結果表示の共通UI。ローカル・オンライン両方から使う。
 import { Race, simulateRaceData } from "./race.js";
 import { makeRng } from "./rng.js";
+import { settleTickets } from "./engine.js";
 import { showScreen } from "./ui.js";
 
 const PHOTO_GAP = 0.16; // この着差(s)未満なら写真判定演出
+const LIVE_INTERVAL = 130; // ライブ表示の更新間隔(ms)
+
+let liveCtx = null;     // { engine, players:[{name,tickets}], bettorMap }
+let lastLive = 0;
 
 // raceSeed と horses からレースを再生する。
+//  context（任意）= { engine, players:[{name,tickets}] } を渡すと
+//  「誰が何に賭けたか」「現在順位での損益」をライブ表示する。
 // 返り値: Promise<orderedHorses>（演出終了後に解決）。
-export function playRace(horses, raceSeed) {
+export function playRace(horses, raceSeed, context = null) {
     const raceData = simulateRaceData(horses, makeRng(raceSeed));
     showScreen("screen-race");
 
@@ -15,6 +22,8 @@ export function playRace(horses, raceSeed) {
     document.getElementById("photo-overlay").classList.add("hidden");
     document.getElementById("flash").classList.remove("fire");
     const status = document.getElementById("race-status");
+
+    setupLive(context);
 
     const race = new Race(canvas, horses, raceData);
     race._draw(0);
@@ -27,9 +36,13 @@ export function playRace(horses, raceSeed) {
             if (c > 0) { status.textContent = c; return; }
             clearInterval(timer);
             status.textContent = "🏇 レース中！";
-            race.onTick = (leader) => { if (leader) status.textContent = `🏇 先頭: ${leader.name}`; };
+            race.onTick = (ordered) => {
+                status.textContent = `🏇 先頭: ${ordered[0].name}`;
+                updateLive(ordered);
+            };
             race.onFinish = (ordered) => {
                 race.onTick = null;
+                updateLive(ordered, true);
                 if (raceData.gap < PHOTO_GAP) photoFinish(ordered, resolve);
                 else {
                     status.textContent = `ゴール！ 1着 ${ordered[0].name}`;
@@ -38,6 +51,66 @@ export function playRace(horses, raceSeed) {
             };
             race.start();
         }, 700);
+    });
+}
+
+// ---- ライブ表示（誰が何に賭けたか・現在順位での損益）----
+function setupLive(context) {
+    const panels = document.querySelector(".live-panels");
+    liveCtx = null;
+    lastLive = 0;
+    if (!context || !context.players || !context.players.length) {
+        if (panels) panels.classList.add("hidden");
+        return;
+    }
+    if (panels) panels.classList.remove("hidden");
+
+    // 各馬ごとに「賭けた人」を集計
+    const bettorMap = {};
+    for (const h of context.engine.horses) bettorMap[h.id] = [];
+    context.players.forEach((p) => {
+        const ids = new Set();
+        (p.tickets || []).forEach((t) => (t.sel || []).forEach((id) => ids.add(id)));
+        ids.forEach((id) => { if (bettorMap[id]) bettorMap[id].push(p.name); });
+    });
+    liveCtx = { engine: context.engine, players: context.players, bettorMap };
+}
+
+function updateLive(ordered, force = false) {
+    if (!liveCtx) return;
+    const now = performance.now();
+    if (!force && now - lastLive < LIVE_INTERVAL) return;
+    lastLive = now;
+
+    const orderIds = ordered.map((h) => h.id);
+    const medals = ["🥇", "🥈", "🥉"];
+
+    // 順位 + 賭けた人
+    const st = document.getElementById("live-standings");
+    st.innerHTML = "";
+    ordered.forEach((h, i) => {
+        const li = document.createElement("li");
+        const who = liveCtx.bettorMap[h.id] || [];
+        const tag = who.length ? `<span class="who-tag">賭: ${who.join(", ")}</span>` : "";
+        li.innerHTML = `
+            <span class="lr">${medals[i] || i + 1}</span>
+            <span class="dot" style="background:${h.color}"></span>
+            <span class="lh">${h.id + 1}. ${h.name}</span>
+            ${tag}`;
+        st.appendChild(li);
+    });
+
+    // 今ゴールなら…の損益
+    const pl = document.getElementById("live-pl");
+    pl.innerHTML = "";
+    liveCtx.players.forEach((p) => {
+        const res = settleTickets(p.tickets || [], orderIds, liveCtx.engine.horses, liveCtx.engine.byKey);
+        const d = res.delta;
+        const str = d > 0 ? `+${d}` : d < 0 ? `${d}` : "±0";
+        const cls = d > 0 ? "win" : d < 0 ? "lose" : "";
+        const li = document.createElement("li");
+        li.innerHTML = `<span>${p.name}</span><span class="delta ${cls}">${str}</span>`;
+        pl.appendChild(li);
     });
 }
 
@@ -107,7 +180,6 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
         st.appendChild(li);
     });
 
-    // ボタン設定
     const primary = document.getElementById("rematch");
     const secondary = document.getElementById("back-to-setup");
     const note = document.getElementById("result-note");

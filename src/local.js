@@ -89,7 +89,10 @@ function renderPicker() {
 
 async function runRaceAndResult() {
     const raceSeed = randomSeed();
-    const ordered = await playRace(s.engine.horses, raceSeed);
+    const ordered = await playRace(s.engine.horses, raceSeed, {
+        engine: s.engine,
+        players: s.players.map((p, i) => ({ name: p.name, tickets: s.bets[i] })),
+    });
     const orderIds = ordered.map((h) => h.id);
 
     const payoutRows = s.bets.map((tickets, i) => {

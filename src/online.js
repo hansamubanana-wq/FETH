@@ -215,7 +215,11 @@ async function handleRace(room) {
     if (o.playedRound === room.round) return;
     o.playedRound = room.round;
 
-    const ordered = await playRace(o.engine.horses, room.raceSeed);
+    const ps0 = room.players || {};
+    const ordered = await playRace(o.engine.horses, room.raceSeed, {
+        engine: o.engine,
+        players: Object.keys(ps0).map((id) => ({ name: ps0[id].name, tickets: ps0[id].tickets || [] })),
+    });
     const orderIds = ordered.map((h) => h.id);
 
     if (o.isHost && o.settledRound !== room.round) {
