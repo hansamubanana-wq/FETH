@@ -10,21 +10,23 @@ export function rollPerf(power) {
     return power * (1 + (Math.random() - 0.5) * 2 * FORM_SPREAD);
 }
 
-// 1ステップの瞬間速度。perf を基準に、毎フレームの緩急(noise)を加える。
-function computeSpeed(perf) {
-    return Math.max(30, SPEED_BASE * perf + (Math.random() - 0.5) * 2 * SPEED_NOISE);
+// 1ステップの瞬間速度。perf を基準に、脚質(pace)と毎フレームの緩急(noise)を掛ける。
+// t は進行度(0..1)。脚質によって速いタイミングが変わる。
+function computeSpeed(perf, style, t) {
+    const pace = style.profile(Math.min(1, Math.max(0, t)));
+    return Math.max(30, SPEED_BASE * perf * pace + (Math.random() - 0.5) * 2 * SPEED_NOISE);
 }
 
 // 描画なしでレースを1回走らせ、ゴール順（horse.id の配列）を返す。
-// オッズ算出のためのモンテカルロに使う。アニメ本番と同じモデルで走らせる。
+// オッズ算出のためのモンテカルロに使う。アニメ本番と同じモデル（脚質込み）で走らせる。
 export function simulateOrder(horses) {
     const dt = 1 / 30;
-    const runners = horses.map((h) => ({ id: h.id, perf: rollPerf(h.power), x: 0, done: false }));
+    const runners = horses.map((h) => ({ id: h.id, perf: rollPerf(h.power), style: h.style, x: 0, done: false }));
     const order = [];
     while (order.length < runners.length) {
         for (const r of runners) {
             if (r.done) continue;
-            r.x += computeSpeed(r.perf) * dt;
+            r.x += computeSpeed(r.perf, r.style, r.x / TRACK_LEN) * dt;
             if (r.x >= TRACK_LEN) {
                 r.done = true;
                 order.push(r.id);
@@ -63,6 +65,8 @@ export class Race {
         this.order = [];      // ゴール順
         this.running = false;
         this.onFinish = null; // 全馬ゴール時のコールバック
+        this.onTick = null;   // 毎フレームの通知（先頭表示用）
+        this.raceTime = 0;    // レース経過時間(s)。写真判定の着差判定に使う
         this._raf = null;
         this._last = 0;
     }
@@ -83,6 +87,7 @@ export class Race {
         this._last = now;
         this._update(dt);
         this._draw();
+        if (this.onTick) this.onTick(this._leader());
         if (this.order.length < this.runners.length) {
             this._raf = requestAnimationFrame((t) => this._loop(t));
         } else if (this.onFinish) {
@@ -92,19 +97,40 @@ export class Race {
     }
 
     _update(dt) {
+        this.raceTime += dt;
         for (const r of this.runners) {
             if (r.finished) continue;
-            r.speed = computeSpeed(r.perf);
+            const t = (r.x - this.startX) / (this.finishX - this.startX);
+            r.speed = computeSpeed(r.perf, r.horse.style, t);
             r.x += r.speed * dt;
             r.bob += dt * 14;
 
             if (r.x >= this.finishX) {
+                // ゴールを越えた分から、ライン到達時刻を補間して着差を精密化
+                const over = r.x - this.finishX;
+                r.finishTime = this.raceTime - (over / Math.max(1, r.speed));
                 r.x = this.finishX;
                 r.finished = true;
                 r.finishOrder = this.order.length + 1;
                 this.order.push(r);
             }
         }
+    }
+
+    // 先頭を走っている馬（未ゴール優先、いなければ最後の1頭）
+    _leader() {
+        let lead = null;
+        for (const r of this.runners) {
+            if (r.finished) continue;
+            if (!lead || r.x > lead.x) lead = r;
+        }
+        return lead ? lead.horse : (this.order.length ? this.order[0].horse : null);
+    }
+
+    // 1着と2着の着差（秒）。写真判定の判断に使う。
+    finishGap() {
+        if (this.order.length < 2) return 999;
+        return Math.abs(this.order[1].finishTime - this.order[0].finishTime);
     }
 
     _draw() {
