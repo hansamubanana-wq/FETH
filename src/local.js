@@ -1,5 +1,5 @@
 // ローカル（1台で順番に回す）モードのコントローラ。
-import { buildRace, settleBet, NUM_HORSES } from "./engine.js";
+import { buildRace, settleTickets, NUM_HORSES } from "./engine.js";
 import { startBetPanel } from "./betui.js";
 import { playRace, renderResult } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
@@ -75,11 +75,11 @@ function renderPicker() {
     startBetPanel({
         engine: s.engine,
         balance: player.balance,
-        onComplete: (bet) => {
+        onComplete: (tickets) => {
             if (s.firstRound) {
                 player.name = nameInput.value.trim() || `プレイヤー${idx + 1}`;
             }
-            s.bets.push(bet);
+            s.bets.push(tickets);
             s.picker++;
             if (s.picker >= s.numPlayers) runRaceAndResult();
             else renderPicker();
@@ -92,9 +92,9 @@ async function runRaceAndResult() {
     const ordered = await playRace(s.engine.horses, raceSeed);
     const orderIds = ordered.map((h) => h.id);
 
-    const payoutRows = s.bets.map((bet, i) => {
+    const payoutRows = s.bets.map((tickets, i) => {
         const player = s.players[i];
-        const res = settleBet(bet, orderIds, s.engine.horses, s.engine.byKey);
+        const res = settleTickets(tickets, orderIds, s.engine.horses, s.engine.byKey);
         player.balance += res.delta;
         return { name: player.name, detail: res.detail, delta: res.delta };
     });

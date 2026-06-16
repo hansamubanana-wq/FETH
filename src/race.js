@@ -4,6 +4,7 @@ const SPEED_NOISE = 95;   // 毎フレームの緩急の振れ幅(±)
 const TRACK_LEN = 820;    // スタート〜ゴールの距離(px)
 const FORM_SPREAD = 0.55; // レースごとの「調子」のばらつき(±55%)
 const SIM_DT = 1 / 60;    // 事前計算の固定タイムステップ(s)
+const RACE_DURATION = 20; // 再生にかける秒数（演出尺。結果・オッズには影響しない）
 
 // レースごとの実力値。能力(power)にそのレース限定の「調子」を掛ける。
 export function rollPerf(power, rng) {
@@ -105,10 +106,13 @@ export class Race {
 
     _loop(now) {
         const elapsed = (now - this._startWall) / 1000;
-        const { frames, dt } = this.data;
-        const fpos = elapsed / dt;
+        const { frames } = this.data;
+        const total = frames.length - 1;
+        // 事前計算したレースを RACE_DURATION 秒に引き伸ばして再生する
+        const progress = Math.min(1, elapsed / RACE_DURATION);
+        const fpos = progress * total;
         const f0 = Math.floor(fpos);
-        const done = f0 >= frames.length - 1;
+        const done = progress >= 1;
 
         if (done) {
             // 最終位置に固定して描画

@@ -24,6 +24,20 @@ export function buildRace(horseSeed) {
     return { horses, betTypes, byKey, oddsFor };
 }
 
+// 複数枚の馬券をまとめて精算する。tickets = [{typeKey,sel,amount,odds}, ...]。
+// 返り値 { delta, detail }（delta は合計の増減）。
+export function settleTickets(tickets, orderIds, horses, byKey) {
+    if (!tickets || !tickets.length) return { delta: 0, detail: "賭けなし" };
+    let delta = 0;
+    const parts = [];
+    for (const t of tickets) {
+        const r = settleBet(t, orderIds, horses, byKey);
+        delta += r.delta;
+        parts.push(r.detail);
+    }
+    return { delta, detail: parts.join(" ／ ") };
+}
+
 // 1件の賭けを精算する。bet = { typeKey, sel, amount, odds }。
 // orderIds = ゴール順の horse.id 配列。返り値 { delta, detail, won }。
 export function settleBet(bet, orderIds, horses, byKey) {

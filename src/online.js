@@ -2,7 +2,7 @@
 // 全端末は horseSeed / raceSeed から決定論的に同じ馬・同じレース映像を作る。
 // Firebase SDK はオンラインに入ったときだけ動的に読み込む（ローカルモードを邪魔しない）。
 import { firebaseConfig } from "./firebase-config.js";
-import { buildRace, settleBet } from "./engine.js";
+import { buildRace, settleTickets } from "./engine.js";
 import { startBetPanel } from "./betui.js";
 import { playRace, renderResult } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
@@ -67,7 +67,7 @@ async function createRoom() {
     o.isHost = true;
     await fb.setDoc(roomDoc(), {
         host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0,
-        players: { [uid]: { name, balance: funds, betDone: false, bet: null } },
+        players: { [uid]: { name, balance: funds, betDone: false, tickets: [] } },
     });
     subscribe();
 }
@@ -83,7 +83,7 @@ async function joinRoom() {
     const room = snap.data();
     o.isHost = (room.host === uid);
     await fb.updateDoc(roomDoc(), {
-        [`players.${uid}`]: { name, balance: room.funds, betDone: false, bet: null },
+        [`players.${uid}`]: { name, balance: room.funds, betDone: false, tickets: [] },
     });
     subscribe();
 }
@@ -174,7 +174,7 @@ function hostStartBetting() {
     const updates = { phase: "betting", round, horseSeed: randomSeed(), raceSeed: 0 };
     Object.keys(o.room.players || {}).forEach((id) => {
         updates[`players.${id}.betDone`] = false;
-        updates[`players.${id}.bet`] = null;
+        updates[`players.${id}.tickets`] = [];
     });
     fb.updateDoc(roomDoc(), updates);
 }
@@ -196,8 +196,8 @@ function handleBetting(room) {
     startBetPanel({
         engine: o.engine,
         balance: me.balance,
-        onComplete: (bet) => fb.updateDoc(roomDoc(), {
-            [`players.${uid}.bet`]: bet || null,
+        onComplete: (tickets) => fb.updateDoc(roomDoc(), {
+            [`players.${uid}.tickets`]: tickets || [],
             [`players.${uid}.betDone`]: true,
         }),
     });
@@ -223,7 +223,7 @@ async function handleRace(room) {
         const ps = o.room.players || {};
         const updates = { phase: "result" };
         Object.keys(ps).forEach((id) => {
-            const res = settleBet(ps[id].bet, orderIds, o.engine.horses, o.engine.byKey);
+            const res = settleTickets(ps[id].tickets, orderIds, o.engine.horses, o.engine.byKey);
             updates[`players.${id}.balance`] = ps[id].balance + res.delta;
         });
         await fb.updateDoc(roomDoc(), updates);
@@ -246,7 +246,7 @@ function maybeShowResult(room) {
     const ps = room.players || {};
 
     const payoutRows = Object.keys(ps).map((id) => {
-        const res = settleBet(ps[id].bet, orderIds, o.engine.horses, o.engine.byKey);
+        const res = settleTickets(ps[id].tickets, orderIds, o.engine.horses, o.engine.byKey);
         return { name: ps[id].name + (id === uid ? "（あなた）" : ""), detail: res.detail, delta: res.delta };
     });
     const standings = Object.keys(ps)
