@@ -555,6 +555,51 @@ button.ghost {
     margin: 0 auto;
 }
 
+.code-box {
+    text-align: center;
+    font-size: 1.2rem;
+    margin: 12px 0;
+}
+
+.code-box b {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 6px 18px;
+    border-radius: 10px;
+    background: var(--bg2);
+    color: var(--accent);
+    font-size: 1.8rem;
+    letter-spacing: 0.3em;
+}
+
+#screen-create input[type="number"],
+#screen-join input,
+#screen-create input[type="text"] {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #2f4a73;
+    background: var(--bg2);
+    color: var(--text);
+    font-size: 1rem;
+}
+
+#join-code {
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    text-align: center;
+    font-size: 1.4rem;
+}
+
+.card .ghost {
+    margin-top: 12px;
+}
+
+code {
+    background: var(--bg2);
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
 .hidden {
     display: none !important;
 }

@@ -11,11 +11,20 @@
 
 <body>
     <div id="app">
-        <!-- スタート画面 -->
-        <section id="screen-setup" class="screen active">
+        <!-- ホーム -->
+        <section id="screen-home" class="screen active">
             <h1>🐎 みんなで競馬</h1>
-            <p class="subtitle">一台でみんなで遊べる、ゲーム内コインを賭ける競馬ゲーム</p>
+            <p class="subtitle">お金をかけない、ゲーム内コインの競馬ゲーム</p>
+            <div class="card">
+                <button id="go-local" class="primary">ローカル（1台でみんなで）</button>
+                <button id="go-online" class="ghost">オンライン対戦（合言葉で集合）</button>
+            </div>
+            <p class="hint">ローカルは1台を回して遊ぶモード。オンラインは各自の端末から同じレースに参加できます。</p>
+        </section>
 
+        <!-- ローカル：セットアップ -->
+        <section id="screen-setup" class="screen">
+            <h1>🐎 ローカル対戦</h1>
             <div class="card">
                 <label class="field">
                     <span>プレイヤー人数</span>
@@ -25,7 +34,6 @@
                         <button type="button" id="player-plus">＋</button>
                     </div>
                 </label>
-
                 <label class="field">
                     <span>初期コイン</span>
                     <div class="counter">
@@ -34,15 +42,83 @@
                         <button type="button" id="funds-plus">＋</button>
                     </div>
                 </label>
-
                 <button id="to-pick" class="primary">馬に賭ける →</button>
+                <button class="ghost" data-home>← ホームへ</button>
             </div>
-            <p class="hint">同じ画面を順番にまわして、各プレイヤーが賭ける馬とコインを決めます。同じ馬に賭けてもOK。</p>
+            <p class="hint">出走は8頭。同じ画面を順番にまわして各自の賭けを決めます。同じ馬に賭けてもOK。</p>
         </section>
 
-        <!-- 馬選び・ベット画面 -->
+        <!-- オンライン：ホーム -->
+        <section id="screen-online-home" class="screen">
+            <h1>🌐 オンライン対戦</h1>
+            <div class="card">
+                <button id="online-create-open" class="primary">部屋を作る</button>
+                <button id="online-join-open" class="ghost">合言葉で参加する</button>
+                <button class="ghost" data-home>← ホームへ</button>
+            </div>
+        </section>
+
+        <!-- オンライン：未設定の案内 -->
+        <section id="screen-online-setup-needed" class="screen">
+            <h2>オンラインは設定が必要です</h2>
+            <div class="card">
+                <p>オンライン対戦を使うには、あなたの Firebase プロジェクトの設定を
+                    <code>src/firebase-config.js</code> に入れてください。</p>
+                <p class="hint">設定後はこのまま使えます。</p>
+                <button class="ghost" data-home>← ホームへ</button>
+            </div>
+        </section>
+
+        <!-- オンライン：部屋を作る -->
+        <section id="screen-create" class="screen">
+            <h2>部屋を作る</h2>
+            <div class="card">
+                <label class="field"><span>あなたの名前</span>
+                    <input id="create-name" type="text" maxlength="10" placeholder="ホスト"></label>
+                <label class="field"><span>初期コイン</span>
+                    <input id="create-funds" type="number" min="500" max="5000" step="100" value="1000"></label>
+                <button id="online-create-go" class="primary">部屋を作成</button>
+                <button class="ghost" data-home>← ホームへ</button>
+            </div>
+        </section>
+
+        <!-- オンライン：参加 -->
+        <section id="screen-join" class="screen">
+            <h2>合言葉で参加</h2>
+            <div class="card">
+                <label class="field"><span>合言葉（4文字）</span>
+                    <input id="join-code" type="text" maxlength="4" placeholder="ABCD" autocapitalize="characters"></label>
+                <label class="field"><span>あなたの名前</span>
+                    <input id="join-name" type="text" maxlength="10" placeholder="プレイヤー"></label>
+                <button id="online-join-go" class="primary">参加する</button>
+                <button class="ghost" data-home>← ホームへ</button>
+            </div>
+        </section>
+
+        <!-- オンライン：ロビー -->
+        <section id="screen-lobby" class="screen">
+            <h2>待機ルーム</h2>
+            <div class="code-box">合言葉 <b id="lobby-code">----</b></div>
+            <ol id="lobby-players" class="standings"></ol>
+            <p class="subtitle" id="lobby-note"></p>
+            <div class="result-buttons">
+                <button id="lobby-start" class="primary hidden">ゲーム開始</button>
+                <button class="ghost" data-leave>退出する</button>
+            </div>
+        </section>
+
+        <!-- オンライン：待機（賭け待ち / 次レース待ち） -->
+        <section id="screen-wait" class="screen">
+            <h2 id="wait-title">待機中…</h2>
+            <ol id="wait-players" class="standings"></ol>
+            <div class="result-buttons">
+                <button class="ghost" data-leave>退出する</button>
+            </div>
+        </section>
+
+        <!-- 馬選び・ベット（共通） -->
         <section id="screen-pick" class="screen">
-            <h2 id="pick-title">プレイヤー1 の番</h2>
+            <h2 id="pick-title">あなたの番</h2>
             <div class="balance-bar">残高 <b><span id="pick-balance">1000</span></b> コイン</div>
 
             <label class="field name-field" id="name-wrap">
@@ -75,11 +151,11 @@
             <div id="horse-choices" class="horse-grid"></div>
             <div class="pick-actions">
                 <button id="confirm-bet" class="primary hidden">この内容で賭ける</button>
-                <button id="skip-bet" class="ghost">賭けずに次の人へ</button>
+                <button id="skip-bet" class="ghost">賭けずに次へ</button>
             </div>
         </section>
 
-        <!-- レース画面 -->
+        <!-- レース（共通） -->
         <section id="screen-race" class="screen">
             <div id="race-status">よーい…</div>
             <div class="race-stage">
@@ -90,10 +166,9 @@
                     <span class="photo-text">📷 写真判定中…</span>
                 </div>
             </div>
-            <button id="start-race" class="primary">スタート！</button>
         </section>
 
-        <!-- 結果画面 -->
+        <!-- 結果（共通） -->
         <section id="screen-result" class="screen">
             <h2>🏁 結果発表</h2>
             <ol id="result-list" class="result-list"></ol>
@@ -101,9 +176,10 @@
             <div id="payouts" class="payouts"></div>
             <h3 class="section-title">所持コイン順位</h3>
             <ol id="standings" class="standings"></ol>
+            <p class="subtitle" id="result-note"></p>
             <div class="result-buttons">
                 <button id="rematch" class="primary">同じメンバーでもう一度</button>
-                <button id="back-to-setup" class="ghost">最初から（残高リセット）</button>
+                <button id="back-to-setup" class="ghost">最初から</button>
             </div>
         </section>
     </div>

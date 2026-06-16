@@ -26,17 +26,18 @@ export const STYLES = {
 const STYLE_KEYS = Object.keys(STYLES);
 
 // 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)と脚質を付与。
-export function drawHorses(n) {
+// rng を渡すと決定論的に生成できる（オンラインで全端末を一致させる用）。
+export function drawHorses(n, rng = Math.random) {
     const pool = [...HORSE_POOL];
     for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rng() * (i + 1));
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool.slice(0, n).map((h, i) => {
         // 基礎能力。幅を広く取って「強い馬・弱い馬」をはっきりさせる。
         // 0.70 〜 1.55 程度。差が大きいほどオッズの差も大きくなる。
-        const power = 0.70 + Math.random() * 0.85;
-        const style = STYLES[STYLE_KEYS[Math.floor(Math.random() * STYLE_KEYS.length)]];
+        const power = 0.70 + rng() * 0.85;
+        const style = STYLES[STYLE_KEYS[Math.floor(rng() * STYLE_KEYS.length)]];
         return {
             id: i,
             name: h.name,
