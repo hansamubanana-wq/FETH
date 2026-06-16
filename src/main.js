@@ -1,22 +1,30 @@
 import { drawHorses } from "./horses.js";
-import { Race } from "./race.js";
+import { Race, simulateOrder } from "./race.js";
+import { buildBetTypes, evalOdds } from "./bets.js";
 
 const MIN_PLAYERS = 1, MAX_PLAYERS = 8;
 const MIN_HORSES = 2, MAX_HORSES = 12;
 const FUNDS_MIN = 500, FUNDS_MAX = 5000, FUNDS_STEP = 100;
 const BET_STEP = 100;
+const SIM_RUNS = 3000; // オッズ算出用のシミュレーション回数
 
 const state = {
     numPlayers: 2,
     numHorses: 6,
     startingFunds: 1000,
     horses: [],
-    players: [],      // { name, balance } ラウンドをまたいで持ち越す
-    bets: [],         // { horseId, amount } 今ラウンドの賭け（playerと同じindex）
+    players: [],       // { name, balance } ラウンドをまたいで持ち越す
+    bets: [],          // { type, sel, amount, odds } 今ラウンドの賭け（playerと同じindex）
     currentPicker: 0,
-    betAmount: 100,   // 今操作中のプレイヤーの賭け金
-    firstRound: true, // 名前入力を出すかどうか
+    betAmount: 100,
+    firstRound: true,
     race: null,
+    simOrders: [],     // オッズ算出用の擬似レース結果
+    betTypes: [],      // 今ラウンドで使える賭け式
+    placeN: 3,
+    // 操作中プレイヤーの選択状態
+    currentType: null,
+    selection: [],     // 選んだ horse.id（タップ順）
 };
 
 // ---- 画面切り替え ----
@@ -45,7 +53,6 @@ setupCounter("funds-count", "funds-minus", "funds-plus", "startingFunds", FUNDS_
 
 // ---- セットアップ → ベット ----
 document.getElementById("to-pick").addEventListener("click", () => {
-    // プレイヤーを初期残高つきで作成
     state.players = Array.from({ length: state.numPlayers }, (_, i) => ({
         name: `プレイヤー${i + 1}`,
         balance: state.startingFunds,
@@ -57,6 +64,18 @@ document.getElementById("to-pick").addEventListener("click", () => {
 // ---- 1ラウンドのベット開始 ----
 function startBettingRound() {
     state.horses = drawHorses(state.numHorses);
+
+    // 出走頭数で複勝/ワイドの「○着以内」を決める（実競馬に近い目安）
+    state.placeN = state.numHorses >= 8 ? 3 : 2;
+    const all = buildBetTypes(state.placeN);
+    state.betTypes = all.filter((t) => state.numHorses >= t.nPick);
+
+    // オッズ算出用にレースを多数シミュレーション
+    state.simOrders = [];
+    for (let i = 0; i < SIM_RUNS; i++) {
+        state.simOrders.push(simulateOrder(state.horses));
+    }
+
     state.bets = [];
     state.currentPicker = 0;
     renderPick();
@@ -83,74 +102,195 @@ function renderPick() {
         nameWrap.classList.add("hidden");
     }
 
-    // 賭け金の初期値（残高を超えない範囲で100、残高0なら0）
+    // 賭け式・選択状態を初期化
+    state.currentType = state.betTypes[0];
+    state.selection = [];
+
+    // 賭け金の初期値
     state.betAmount = Math.min(BET_STEP, player.balance);
     updateBetDisplay();
 
-    // 馬一覧
+    renderBetTypeTabs();
+    renderHorses();
+    renderSelection();
+}
+
+// 賭け式タブ
+function renderBetTypeTabs() {
+    const tabs = document.getElementById("bettype-tabs");
+    tabs.innerHTML = "";
+    for (const t of state.betTypes) {
+        const btn = document.createElement("button");
+        btn.textContent = t.label;
+        btn.className = t === state.currentType ? "active" : "";
+        btn.addEventListener("click", () => {
+            state.currentType = t;
+            state.selection = [];
+            renderBetTypeTabs();
+            renderHorses();
+            renderSelection();
+        });
+        tabs.appendChild(btn);
+    }
+    document.getElementById("bettype-desc").textContent = state.currentType.desc;
+    document.getElementById("pick-instruction").textContent = "↓ " + state.currentType.instruction;
+}
+
+// 馬カード
+function renderHorses() {
+    const type = state.currentType;
     const grid = document.getElementById("horse-choices");
     grid.innerHTML = "";
     for (const h of state.horses) {
         const div = document.createElement("div");
         div.className = "horse-pick";
-        const backers = h.backers.length ? `賭けた人: ${h.backers.join(", ")}` : "";
+        div.style.borderColor = h.color;
+
+        // 単勝・複勝など1頭選びの式は、各馬の想定オッズをカードに表示
+        let oddsLine = "";
+        if (type.nPick === 1) {
+            const o = evalOdds(type, [h.id], state.simOrders);
+            oddsLine = `<div class="odds">${type.label}オッズ ${o}倍</div>`;
+        }
+
+        const selPos = state.selection.indexOf(h.id);
+        if (selPos >= 0) div.classList.add("selected");
+        const badge = (selPos >= 0 && type.ordered)
+            ? `<div class="order-badge">${selPos + 1}</div>` : "";
+
         div.innerHTML = `
+            ${badge}
             <div class="emoji" style="filter:drop-shadow(0 0 6px ${h.color})">${h.emoji}</div>
             <div class="hname">${h.id + 1}. ${h.name}</div>
-            <div class="odds">単勝オッズ ${h.odds}倍</div>
-            <div class="takenby">${backers}</div>
+            ${oddsLine}
         `;
-        div.style.borderColor = h.color;
-        div.addEventListener("click", () => pickHorse(h));
+        div.addEventListener("click", () => tapHorse(h));
         grid.appendChild(div);
     }
 }
 
+function tapHorse(horse) {
+    const type = state.currentType;
+
+    if (type.nPick === 1) {
+        // 1頭選びは即確定
+        placeBet([horse.id]);
+        return;
+    }
+
+    // 複数頭選び：トグル選択
+    const pos = state.selection.indexOf(horse.id);
+    if (pos >= 0) {
+        state.selection.splice(pos, 1);
+    } else if (state.selection.length < type.nPick) {
+        state.selection.push(horse.id);
+    }
+    renderHorses();
+    renderSelection();
+}
+
+function renderSelection() {
+    const type = state.currentType;
+    const bar = document.getElementById("selection-bar");
+    const preview = document.getElementById("odds-preview");
+    const confirm = document.getElementById("confirm-bet");
+
+    if (type.nPick === 1) {
+        bar.textContent = "";
+        preview.classList.add("hidden");
+        confirm.classList.add("hidden");
+        return;
+    }
+
+    const names = state.selection.map((id) => {
+        const h = state.horses.find((x) => x.id === id);
+        return `${h.id + 1}.${h.name}`;
+    });
+    const joiner = type.ordered ? " → " : " ・ ";
+    bar.textContent = names.length
+        ? `選択中: ${names.join(joiner)}（${state.selection.length}/${type.nPick}）`
+        : `${type.nPick}頭 選んでください`;
+
+    if (state.selection.length === type.nPick) {
+        const odds = evalOdds(type, state.selection, state.simOrders);
+        const payout = Math.floor(state.betAmount * odds);
+        preview.innerHTML = `予想オッズ <b>${odds}倍</b> ／ 当たれば <b>${payout}</b> コイン`;
+        preview.classList.remove("hidden");
+        confirm.classList.remove("hidden");
+    } else {
+        preview.classList.add("hidden");
+        confirm.classList.add("hidden");
+    }
+}
+
+// ---- 賭け金コントロール ----
 function updateBetDisplay() {
     document.getElementById("bet-amount").textContent = state.betAmount;
 }
-
 function clampBet() {
     const max = state.players[state.currentPicker].balance;
     state.betAmount = Math.max(0, Math.min(state.betAmount, max));
-    // ステップに丸める（全額などで端数が出ても許容）
 }
-
 document.getElementById("bet-minus").addEventListener("click", () => {
-    state.betAmount -= BET_STEP;
-    clampBet();
-    updateBetDisplay();
+    state.betAmount -= BET_STEP; clampBet(); updateBetDisplay(); renderSelection();
 });
 document.getElementById("bet-plus").addEventListener("click", () => {
-    state.betAmount += BET_STEP;
-    clampBet();
-    updateBetDisplay();
+    state.betAmount += BET_STEP; clampBet(); updateBetDisplay(); renderSelection();
 });
 document.querySelectorAll(".bet-quick button").forEach((btn) => {
     btn.addEventListener("click", () => {
         const bal = state.players[state.currentPicker].balance;
         const v = btn.dataset.bet;
-        if (v === "0") state.betAmount = 0;
-        else if (v === "half") state.betAmount = Math.floor(bal / 2);
+        if (v === "half") state.betAmount = Math.floor(bal / 2);
         else if (v === "all") state.betAmount = bal;
-        clampBet();
-        updateBetDisplay();
+        clampBet(); updateBetDisplay(); renderSelection();
     });
 });
 
-function pickHorse(horse) {
-    const idx = state.currentPicker;
-    const player = state.players[idx];
+document.getElementById("confirm-bet").addEventListener("click", () => {
+    if (state.selection.length === state.currentType.nPick) {
+        placeBet([...state.selection]);
+    }
+});
 
-    if (state.firstRound) {
-        player.name = document.getElementById("player-name").value.trim() || `プレイヤー${idx + 1}`;
+document.getElementById("skip-bet").addEventListener("click", () => {
+    saveNameIfFirst();
+    state.bets.push({ type: null, sel: [], amount: 0, odds: 0 });
+    advancePicker();
+});
+
+// ---- 賭けを確定 ----
+function placeBet(sel) {
+    const type = state.currentType;
+    const amount = state.betAmount;
+
+    // 賭け金0なら賭けなし扱い
+    if (amount <= 0) {
+        saveNameIfFirst();
+        state.bets.push({ type: null, sel: [], amount: 0, odds: 0 });
+        advancePicker();
+        return;
     }
 
-    const amount = state.betAmount;
-    horse.backers.push(player.name);
-    state.bets.push({ horseId: horse.id, amount });
-    state.currentPicker++;
+    const odds = evalOdds(type, sel, state.simOrders);
+    saveNameIfFirst();
+    const player = state.players[state.currentPicker];
+    for (const id of sel) {
+        state.horses.find((h) => h.id === id).backers.push(player.name);
+    }
+    state.bets.push({ type, sel, amount, odds });
+    advancePicker();
+}
 
+function saveNameIfFirst() {
+    if (!state.firstRound) return;
+    const idx = state.currentPicker;
+    const v = document.getElementById("player-name").value.trim();
+    state.players[idx].name = v || `プレイヤー${idx + 1}`;
+}
+
+function advancePicker() {
+    state.currentPicker++;
     if (state.currentPicker >= state.numPlayers) {
         goToRace();
     } else {
@@ -171,8 +311,7 @@ function goToRace() {
 }
 
 document.getElementById("start-race").addEventListener("click", () => {
-    const startBtn = document.getElementById("start-race");
-    startBtn.disabled = true;
+    document.getElementById("start-race").disabled = true;
     const status = document.getElementById("race-status");
     let count = 3;
     status.textContent = count;
@@ -199,7 +338,7 @@ function runRace() {
 // ---- 結果画面 ----
 function showResult(orderedHorses) {
     show("screen-result");
-    const winnerHorse = orderedHorses[0];
+    const order = orderedHorses.map((h) => h.id); // ゴール順 id 配列
 
     // 着順
     const list = document.getElementById("result-list");
@@ -215,34 +354,37 @@ function showResult(orderedHorses) {
         list.appendChild(li);
     });
 
-    // 払い戻しを計算して残高に反映
+    // 払い戻し
     const payoutsDiv = document.getElementById("payouts");
     payoutsDiv.innerHTML = "";
     state.bets.forEach((bet, i) => {
         const player = state.players[i];
-        const horse = state.horses.find((h) => h.id === bet.horseId);
-        const won = bet.horseId === winnerHorse.id;
         let delta = 0;
         let detail = "";
 
-        if (bet.amount === 0) {
+        if (!bet.type || bet.amount === 0) {
             detail = "賭けなし";
-        } else if (won) {
-            const payout = Math.floor(bet.amount * parseFloat(horse.odds));
-            delta = payout - bet.amount;
-            player.balance += delta;
-            detail = `${horse.name} に ${bet.amount} → 払い戻し ${payout}`;
         } else {
-            delta = -bet.amount;
-            player.balance += delta;
-            detail = `${horse.name} に ${bet.amount}（はずれ）`;
+            const horseLabel = bet.sel
+                .map((id) => state.horses.find((h) => h.id === id).id + 1)
+                .join(bet.type.ordered ? "→" : "・");
+            const won = bet.type.test(order, bet.sel);
+            if (won) {
+                const payout = Math.floor(bet.amount * bet.odds);
+                delta = payout - bet.amount;
+                player.balance += delta;
+                detail = `${bet.type.label} [${horseLabel}] ${bet.amount} → 払戻 ${payout}（${bet.odds}倍）`;
+            } else {
+                delta = -bet.amount;
+                player.balance += delta;
+                detail = `${bet.type.label} [${horseLabel}] ${bet.amount}（はずれ）`;
+            }
         }
 
+        const deltaStr = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "±0";
+        const cls = delta > 0 ? "win" : delta < 0 ? "lose" : "";
         const row = document.createElement("div");
         row.className = "payout-row";
-        const deltaStr =
-            delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "±0";
-        const cls = delta > 0 ? "win" : delta < 0 ? "lose" : "";
         row.innerHTML = `
             <div>
                 <div class="who">${player.name}</div>
@@ -260,7 +402,8 @@ function showResult(orderedHorses) {
         .sort((a, b) => b.balance - a.balance)
         .forEach((p, i) => {
             const li = document.createElement("li");
-            li.innerHTML = `<span>${medals[i] || i + 1 + "位"} ${p.name}</span><span class="coins">${p.balance} コイン</span>`;
+            const rank = medals[i] || `${i + 1}位`;
+            li.innerHTML = `<span>${rank} ${p.name}</span><span class="coins">${p.balance} コイン</span>`;
             standings.appendChild(li);
         });
 }

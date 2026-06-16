@@ -1,3 +1,39 @@
+// レースの基礎パラメータ。アニメ描画とオッズ算出用シミュレーションで共有する。
+const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
+const SPEED_NOISE = 95;   // 毎フレームの緩急の振れ幅(±)
+const TRACK_LEN = 820;    // スタート〜ゴールの距離(px)
+const FORM_SPREAD = 0.55; // レースごとの「調子」のばらつき(±55%)
+
+// レースごとの実力値。能力(power)に、そのレース限定の「調子」を掛ける。
+// 調子で番狂わせが起きるので、強い馬が有利だが弱い馬にもチャンスが残る。
+export function rollPerf(power) {
+    return power * (1 + (Math.random() - 0.5) * 2 * FORM_SPREAD);
+}
+
+// 1ステップの瞬間速度。perf を基準に、毎フレームの緩急(noise)を加える。
+function computeSpeed(perf) {
+    return Math.max(30, SPEED_BASE * perf + (Math.random() - 0.5) * 2 * SPEED_NOISE);
+}
+
+// 描画なしでレースを1回走らせ、ゴール順（horse.id の配列）を返す。
+// オッズ算出のためのモンテカルロに使う。アニメ本番と同じモデルで走らせる。
+export function simulateOrder(horses) {
+    const dt = 1 / 30;
+    const runners = horses.map((h) => ({ id: h.id, perf: rollPerf(h.power), x: 0, done: false }));
+    const order = [];
+    while (order.length < runners.length) {
+        for (const r of runners) {
+            if (r.done) continue;
+            r.x += computeSpeed(r.perf) * dt;
+            if (r.x >= TRACK_LEN) {
+                r.done = true;
+                order.push(r.id);
+            }
+        }
+    }
+    return order;
+}
+
 // canvas 上でレースを描画・進行させるクラス。
 export class Race {
     constructor(canvas, horses) {
@@ -7,14 +43,15 @@ export class Race {
         this.W = canvas.width;
         this.H = canvas.height;
 
-        this.finishX = this.W - 80; // ゴールライン
         this.startX = 60;
+        this.finishX = this.startX + TRACK_LEN; // ゴールライン
         this.laneTop = 70;
         this.laneGap = (this.H - this.laneTop - 30) / horses.length;
 
-        // 各馬の走行状態
+        // 各馬の走行状態（perf はこのレース限定の実力値）
         this.runners = horses.map((h, i) => ({
             horse: h,
+            perf: rollPerf(h.power),
             x: this.startX,
             speed: 0,
             laneY: this.laneTop + this.laneGap * (i + 0.5),
@@ -55,13 +92,9 @@ export class Race {
     }
 
     _update(dt) {
-        const distance = this.finishX - this.startX;
         for (const r of this.runners) {
             if (r.finished) continue;
-            // 基礎速度 + 毎フレームのランダムな緩急で接戦を演出
-            const base = 150 * r.horse.power;
-            const noise = (Math.random() - 0.45) * 220;
-            r.speed = Math.max(40, base + noise);
+            r.speed = computeSpeed(r.perf);
             r.x += r.speed * dt;
             r.bob += dt * 14;
 
@@ -72,7 +105,6 @@ export class Race {
                 this.order.push(r);
             }
         }
-        this._distance = distance;
     }
 
     _draw() {
@@ -95,7 +127,6 @@ export class Race {
         // 各馬
         for (const r of this.runners) {
             const bobY = Math.sin(r.bob) * 4;
-            // 体
             ctx.font = "30px serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
