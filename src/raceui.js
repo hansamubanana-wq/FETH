@@ -180,6 +180,15 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
         st.appendChild(li);
     });
 
+    // 最適だった買い目（最高配当）
+    const bb = document.getElementById("best-bet");
+    if (buttons.bestBet) {
+        bb.innerHTML = `💡 最適だった買い目： <b>${buttons.bestBet.label} [${buttons.bestBet.combo}]</b> <span class="bb-odds">${buttons.bestBet.odds}倍</span>`;
+        bb.classList.remove("hidden");
+    } else {
+        bb.classList.add("hidden");
+    }
+
     const primary = document.getElementById("rematch");
     const secondary = document.getElementById("back-to-setup");
     const note = document.getElementById("result-note");

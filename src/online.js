@@ -2,7 +2,7 @@
 // 全端末は horseSeed / raceSeed から決定論的に同じ馬・同じレース映像を作る。
 // Firebase SDK はオンラインに入ったときだけ動的に読み込む（ローカルモードを邪魔しない）。
 import { firebaseConfig } from "./firebase-config.js";
-import { buildRace, settleTickets } from "./engine.js";
+import { buildRace, settleTickets, bestBet } from "./engine.js";
 import { startBetPanel } from "./betui.js";
 import { playRace, renderResult } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
@@ -212,7 +212,7 @@ function subscribe() {
 
 function clampFunds(v) {
     if (isNaN(v)) return 1000;
-    return Math.max(500, Math.min(5000, Math.round(v / 100) * 100));
+    return Math.max(500, Math.min(10000, Math.round(v / 100) * 100));
 }
 
 function onRoom(room) {
@@ -397,6 +397,7 @@ function maybeShowResult(room) {
         secondaryLabel: "退出する",
         onSecondary: onLeaveClick,
         note: o.isHost ? "" : "ホストが次のレースを始めるのを待っています…",
+        bestBet: bestBet(orderIds, o.engine),
     });
 }
 

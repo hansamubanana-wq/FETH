@@ -77,7 +77,7 @@
                 <label class="field"><span>あなたの名前</span>
                     <input id="create-name" type="text" maxlength="10" placeholder="ホスト"></label>
                 <label class="field"><span>初期コイン</span>
-                    <input id="create-funds" type="number" min="500" max="5000" step="100" value="1000"></label>
+                    <input id="create-funds" type="number" min="500" max="10000" step="100" value="1000"></label>
                 <button id="online-create-go" class="primary">部屋を作成</button>
                 <button class="ghost" data-home>← ホームへ</button>
             </div>
@@ -191,6 +191,7 @@
             <div id="payouts" class="payouts"></div>
             <h3 class="section-title">所持コイン順位</h3>
             <ol id="standings" class="standings"></ol>
+            <div id="best-bet" class="best-bet hidden"></div>
             <p class="subtitle" id="result-note"></p>
             <div class="result-buttons">
                 <button id="rematch" class="primary">同じメンバーでもう一度</button>

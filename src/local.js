@@ -1,11 +1,11 @@
 // ローカル（1台で順番に回す）モードのコントローラ。
-import { buildRace, settleTickets, NUM_HORSES } from "./engine.js";
+import { buildRace, settleTickets, bestBet, NUM_HORSES } from "./engine.js";
 import { startBetPanel } from "./betui.js";
 import { playRace, renderResult } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
 
 const MIN_PLAYERS = 1, MAX_PLAYERS = 8;
-const FUNDS_MIN = 500, FUNDS_MAX = 5000, FUNDS_STEP = 100;
+const FUNDS_MIN = 500, FUNDS_MAX = 10000, FUNDS_STEP = 100;
 
 const s = {
     numPlayers: 2,
@@ -110,6 +110,7 @@ async function runRaceAndResult() {
         secondaryLabel: "最初から（残高リセット）",
         onSecondary: () => enterLocalSetup(),
         note: "",
+        bestBet: bestBet(orderIds, s.engine),
     });
 }
 

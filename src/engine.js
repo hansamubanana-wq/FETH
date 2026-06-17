@@ -24,6 +24,30 @@ export function buildRace(horseSeed) {
     return { horses, betTypes, byKey, oddsFor };
 }
 
+// このレース結果で「一番儲かった買い目（最高配当の的中券）」を求める。
+// orderIds = ゴール順の horse.id 配列。返り値 { label, combo, odds }。
+export function bestBet(orderIds, engine) {
+    const { byKey, oddsFor } = engine;
+    const [o0, o1, o2] = orderIds;
+    const top = orderIds.slice(0, PLACE_N);
+    const cands = [];
+    const add = (key, sel) => { if (byKey[key]) cands.push({ type: byKey[key], sel, odds: oddsFor(key, sel) }); };
+
+    add("win", [o0]);
+    top.forEach((h) => add("place", [h]));        // 複勝は的中する各馬から最高配当を拾う
+    add("quinella", [o0, o1]);
+    add("exacta", [o0, o1]);
+    for (let i = 0; i < top.length; i++)          // ワイドは上位内の全ペア
+        for (let j = i + 1; j < top.length; j++) add("wide", [top[i], top[j]]);
+    add("trio", [o0, o1, o2]);
+    add("trifecta", [o0, o1, o2]);
+
+    let best = cands[0];
+    for (const c of cands) if (c.odds > best.odds) best = c;
+    const combo = best.sel.map((id) => id + 1).join(best.type.ordered ? "→" : "・");
+    return { label: best.type.label, combo, odds: best.odds };
+}
+
 // 複数枚の馬券をまとめて精算する。tickets = [{typeKey,sel,amount,odds}, ...]。
 // 返り値 { delta, detail }（delta は合計の増減）。
 export function settleTickets(tickets, orderIds, horses, byKey) {
