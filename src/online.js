@@ -21,7 +21,8 @@ async function ensureDb() {
     fb = {
         db,
         doc: fsMod.doc, setDoc: fsMod.setDoc, updateDoc: fsMod.updateDoc,
-        getDoc: fsMod.getDoc, onSnapshot: fsMod.onSnapshot, deleteField: fsMod.deleteField,
+        getDoc: fsMod.getDoc, onSnapshot: fsMod.onSnapshot,
+        deleteField: fsMod.deleteField, deleteDoc: fsMod.deleteDoc,
     };
     return fb;
 }
@@ -134,8 +135,12 @@ async function joinRoom() {
     if (!snap.exists()) { alert("その合言葉の部屋が見つかりません"); o.code = null; return; }
     const room = snap.data();
     o.isHost = (room.host === uid);
+    // ロビー以外（ベット/レース/結果）で参加した人は、今回は観戦して次レースから合流。
+    // betDone=true にしておくと進行中のレースをブロックしない。
+    const midGame = room.phase !== "lobby";
+    if (midGame) o.betShownRound = room.round;
     await fb.updateDoc(roomDoc(), {
-        [`players.${uid}`]: { name, balance: room.funds, betDone: false, tickets: [] },
+        [`players.${uid}`]: { name, balance: room.funds, betDone: midGame, tickets: [] },
     });
     setActive(o.code); addRecent(o.code);
     subscribe();
@@ -162,7 +167,11 @@ function onLeaveClick() {
 
 function doLeave() {
     if (o.unsub) { o.unsub(); o.unsub = null; }
-    if (fb && o.code) fb.updateDoc(roomDoc(), { [`players.${uid}`]: fb.deleteField() }).catch(() => {});
+    if (fb && o.code) {
+        const onlyMe = o.room && Object.keys(o.room.players || {}).filter((id) => id !== uid).length === 0;
+        if (onlyMe) fb.deleteDoc(roomDoc()).catch(() => {});            // 最後の1人なら部屋ごと削除
+        else fb.updateDoc(roomDoc(), { [`players.${uid}`]: fb.deleteField() }).catch(() => {});
+    }
     o.code = null; o.room = null; o.isHost = false; o.engine = null; o.engineSeed = null;
     clearActive();
     showScreen("screen-online-home");
@@ -212,6 +221,13 @@ function onRoom(room) {
     const players = room.players || {};
     if (!players[uid]) { doLeave(); return; }
 
+    // ホストが抜けていたら、残っているうち最若番が引き継ぐ（進行が止まらないように）
+    if (!players[room.host]) {
+        const ids = Object.keys(players).sort();
+        if (ids[0] === uid) fb.updateDoc(roomDoc(), { host: uid });
+    }
+    o.isHost = (room.host === uid);
+
     if (room.horseSeed && o.engineSeed !== room.horseSeed) {
         o.engine = buildRace(room.horseSeed);
         o.engineSeed = room.horseSeed;
@@ -225,6 +241,8 @@ function onRoom(room) {
     }
 
     if (o.isHost && room.phase === "betting" && allBet(room)) hostStartRace(room);
+    // ホスト交代などで精算が漏れないよう、ここでも試みる
+    if (room.phase === "race") trySettle();
 }
 
 function allBet(room) {
@@ -275,12 +293,18 @@ function hostStartBetting() {
     fb.updateDoc(roomDoc(), updates);
 }
 
+function showWait(room, title) {
+    showScreen("screen-wait");
+    document.getElementById("wait-title").textContent = title;
+    renderPlayerList("wait-players", room, (p) => (p.betDone ? "✅ 賭けた" : "…考え中"));
+}
+
 function handleBetting(room) {
     const me = room.players[uid];
     if (me.betDone) {
-        showScreen("screen-wait");
-        document.getElementById("wait-title").textContent = "他のプレイヤーの賭けを待っています";
-        renderPlayerList("wait-players", room, (p) => (p.betDone ? "✅ 賭けた" : "…考え中"));
+        // 途中参加で今回観戦の人にも分かるメッセージ
+        const noTickets = !me.tickets || me.tickets.length === 0;
+        showWait(room, noTickets ? "次のレースから参加します（観戦中）" : "他のプレイヤーの賭けを待っています");
         return;
     }
     if (o.betShownRound === room.round || !o.engine) return;
@@ -312,27 +336,40 @@ async function handleRace(room) {
     o.playedRound = room.round;
 
     const ps0 = room.players || {};
-    const ordered = await playRace(o.engine.horses, room.raceSeed, {
+    await playRace(o.engine.horses, room.raceSeed, {
         engine: o.engine,
         players: Object.keys(ps0).map((id) => ({ name: ps0[id].name, tickets: ps0[id].tickets || [] })),
     });
-    const orderIds = ordered.map((h) => h.id);
-
-    if (o.isHost && o.settledRound !== room.round) {
-        o.settledRound = room.round;
-        const ps = o.room.players || {};
-        const updates = { phase: "result" };
-        Object.keys(ps).forEach((id) => {
-            const res = settleTickets(ps[id].tickets, orderIds, o.engine.horses, o.engine.byKey);
-            updates[`players.${id}.balance`] = ps[id].balance + res.delta;
-        });
-        await fb.updateDoc(roomDoc(), updates);
-    }
+    trySettle();
     maybeShowResult(o.room);
 }
 
+// ホストが、自分のレース演出が終わっていれば残高を精算して結果フェーズへ進める。
+// ホスト交代があっても精算が漏れないよう、onRoom からも呼ばれる。
+function trySettle() {
+    const room = o.room;
+    if (!room || room.phase !== "race") return;
+    if (!o.isHost || !o.engine) return;
+    if (o.playedRound !== room.round) return;       // 自分の演出がまだ終わっていない
+    if (o.settledRound === room.round) return;
+    o.settledRound = room.round;
+
+    const orderIds = orderFromSeed(room).map((h) => h.id);
+    const ps = room.players || {};
+    const updates = { phase: "result" };
+    Object.keys(ps).forEach((id) => {
+        const res = settleTickets(ps[id].tickets, orderIds, o.engine.horses, o.engine.byKey);
+        updates[`players.${id}.balance`] = ps[id].balance + res.delta;
+    });
+    fb.updateDoc(roomDoc(), updates);
+}
+
 // ---- 結果 ----
-function handleResult(room) { maybeShowResult(room); }
+function handleResult(room) {
+    // このラウンドのレースを再生した人は結果を表示。途中参加で未再生の人は待機。
+    if (o.playedRound === room.round && o.engine) maybeShowResult(room);
+    else showWait(room, "次のレースを待っています（観戦中）");
+}
 
 function maybeShowResult(room) {
     if (!room || room.phase !== "result") return;
@@ -366,3 +403,7 @@ function orderFromSeed(room) {
     const data = simulateRaceData(o.engine.horses, makeRng(room.raceSeed));
     return data.order.map((i) => o.engine.horses[i]);
 }
+
+// 共有画面（ベット/レース）の退出ボタン用
+export function inRoom() { return !!o.code; }
+export function requestLeave() { onLeaveClick(); }

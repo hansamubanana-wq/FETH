@@ -32,6 +32,25 @@ body {
     max-width: 1000px;
     margin: 0 auto;
     padding: 24px 16px 64px;
+    position: relative;
+}
+
+.exit-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    z-index: 5;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--muted);
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.exit-btn:active {
+    transform: scale(0.95);
 }
 
 .screen {
