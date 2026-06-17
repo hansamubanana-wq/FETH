@@ -2,7 +2,7 @@
 import { showScreen } from "./ui.js";
 import { initBetUI } from "./betui.js";
 import { initLocal, enterLocalSetup } from "./local.js";
-import { initOnline, enterOnlineHome } from "./online.js";
+import { initOnline, enterOnlineHome, reconnectIfPossible } from "./online.js";
 
 // ---- ズーム禁止 ----
 document.addEventListener("gesturestart", (e) => e.preventDefault());
@@ -32,4 +32,7 @@ document.querySelectorAll("[data-home]").forEach((b) =>
 document.getElementById("online-create-open").addEventListener("click", () => showScreen("screen-create"));
 document.getElementById("online-join-open").addEventListener("click", () => showScreen("screen-join"));
 
-showScreen("screen-home");
+// 招待リンク or 前回の在室ルームがあれば自動で復帰、なければホーム
+reconnectIfPossible()
+    .then((handled) => { if (!handled) showScreen("screen-home"); })
+    .catch(() => showScreen("screen-home"));

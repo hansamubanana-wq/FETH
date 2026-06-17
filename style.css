@@ -678,6 +678,36 @@ button.ghost {
     margin: 0 auto;
 }
 
+.recent-rooms {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.recent-label {
+    width: 100%;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.room-chip {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--bg2);
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+}
+
+.room-chip:active {
+    transform: scale(0.96);
+}
+
 .code-box {
     text-align: center;
     font-size: 1.2rem;

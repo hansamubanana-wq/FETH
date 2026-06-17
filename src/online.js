@@ -33,6 +33,20 @@ const uid = (() => {
     return v;
 })();
 
+// 名前・現在のルーム・最近の合言葉（フレンド/お気に入り）を保存する
+const LS = { name: "keiba_name", active: "keiba_active", recent: "keiba_recent" };
+const getName = () => localStorage.getItem(LS.name) || "";
+const saveName = (n) => localStorage.setItem(LS.name, n);
+const setActive = (c) => localStorage.setItem(LS.active, c);
+const getActive = () => localStorage.getItem(LS.active) || "";
+const clearActive = () => localStorage.removeItem(LS.active);
+function getRecent() { try { return JSON.parse(localStorage.getItem(LS.recent) || "[]"); } catch { return []; } }
+function addRecent(code) {
+    const r = getRecent().filter((c) => c !== code);
+    r.unshift(code);
+    localStorage.setItem(LS.recent, JSON.stringify(r.slice(0, 6)));
+}
+
 const o = {
     code: null, isHost: false, room: null,
     engine: null, engineSeed: null, unsub: null,
@@ -51,24 +65,61 @@ export function initOnline() {
     document.getElementById("online-create-go").addEventListener("click", createRoom);
     document.getElementById("online-join-go").addEventListener("click", joinRoom);
     document.getElementById("lobby-start").addEventListener("click", hostStartBetting);
-    document.querySelectorAll("[data-leave]").forEach((b) => b.addEventListener("click", leaveRoom));
+    document.getElementById("lobby-invite").addEventListener("click", shareInvite);
+    document.querySelectorAll("[data-leave]").forEach((b) => b.addEventListener("click", onLeaveClick));
+
+    // アプリ切替・誤操作で抜けないように：在室中はページ離脱を警告
+    window.addEventListener("beforeunload", (e) => {
+        if (o.code) { e.preventDefault(); e.returnValue = ""; }
+    });
 }
 
 export function enterOnlineHome() {
     if (!configured) { showScreen("screen-online-setup-needed"); return; }
+    const n = getName();
+    document.getElementById("create-name").value = n;
+    document.getElementById("join-name").value = n;
+    renderRecent();
     showScreen("screen-online-home");
+}
+
+// 最近遊んだ合言葉（フレンドと使った部屋）をワンタップ参加用に表示
+function renderRecent() {
+    const box = document.getElementById("recent-rooms");
+    if (!box) return;
+    const recent = getRecent();
+    box.innerHTML = "";
+    if (!recent.length) { box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    const label = document.createElement("div");
+    label.className = "recent-label";
+    label.textContent = "フレンドと使った合言葉";
+    box.appendChild(label);
+    recent.forEach((code) => {
+        const chip = document.createElement("button");
+        chip.className = "room-chip";
+        chip.textContent = code;
+        chip.addEventListener("click", () => {
+            document.getElementById("join-code").value = code;
+            document.getElementById("join-name").value = getName();
+            showScreen("screen-join");
+        });
+        box.appendChild(chip);
+    });
 }
 
 async function createRoom() {
     try { await ensureDb(); } catch (e) { alert("Firebaseに接続できませんでした"); return; }
     const name = document.getElementById("create-name").value.trim() || "ホスト";
     const funds = clampFunds(parseInt(document.getElementById("create-funds").value, 10));
+    saveName(name);
     o.code = randomCode();
     o.isHost = true;
     await fb.setDoc(roomDoc(), {
         host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0,
         players: { [uid]: { name, balance: funds, betDone: false, tickets: [] } },
     });
+    setActive(o.code); addRecent(o.code);
     subscribe();
 }
 
@@ -77,6 +128,7 @@ async function joinRoom() {
     const code = document.getElementById("join-code").value.trim().toUpperCase();
     const name = document.getElementById("join-name").value.trim() || "プレイヤー";
     if (!code) { alert("合言葉を入力してください"); return; }
+    saveName(name);
     o.code = code;
     const snap = await fb.getDoc(roomDoc());
     if (!snap.exists()) { alert("その合言葉の部屋が見つかりません"); o.code = null; return; }
@@ -85,14 +137,63 @@ async function joinRoom() {
     await fb.updateDoc(roomDoc(), {
         [`players.${uid}`]: { name, balance: room.funds, betDone: false, tickets: [] },
     });
+    setActive(o.code); addRecent(o.code);
     subscribe();
 }
 
-function leaveRoom() {
+// 招待リンクをシェア／コピー
+async function shareInvite() {
+    const url = `${location.origin}${location.pathname}?room=${o.code}`;
+    const text = `競馬ゲームに参加してね！合言葉: ${o.code}`;
+    try {
+        if (navigator.share) { await navigator.share({ title: "みんなで競馬", text, url }); return; }
+        await navigator.clipboard.writeText(url);
+        alert("招待リンクをコピーしました！\n" + url);
+    } catch (e) {
+        alert("招待リンク:\n" + url);
+    }
+}
+
+// ボタンからの退出（誤操作防止の確認つき）
+function onLeaveClick() {
+    if (o.code && !confirm("ルームから退出しますか？")) return;
+    doLeave();
+}
+
+function doLeave() {
     if (o.unsub) { o.unsub(); o.unsub = null; }
     if (fb && o.code) fb.updateDoc(roomDoc(), { [`players.${uid}`]: fb.deleteField() }).catch(() => {});
     o.code = null; o.room = null; o.isHost = false; o.engine = null; o.engineSeed = null;
+    clearActive();
     showScreen("screen-online-home");
+}
+
+// 起動時：URLの ?room= か、前回の在室ルームに自動再接続する
+export async function reconnectIfPossible() {
+    if (!configured) return false;
+    const params = new URLSearchParams(location.search);
+    const fromUrl = (params.get("room") || "").toUpperCase();
+    if (fromUrl) {
+        // 招待リンク経由：名前を入れて参加してもらう
+        document.getElementById("join-code").value = fromUrl;
+        document.getElementById("join-name").value = getName();
+        showScreen("screen-join");
+        return true;
+    }
+    const code = getActive();
+    if (!code) return false;
+    try {
+        await ensureDb();
+        o.code = code;
+        const snap = await fb.getDoc(roomDoc());
+        if (snap.exists() && (snap.data().players || {})[uid]) {
+            o.isHost = (snap.data().host === uid);
+            subscribe();
+            return true;
+        }
+    } catch (e) { /* ネット不調などは無視してホームへ */ }
+    o.code = null; clearActive();
+    return false;
 }
 
 function subscribe() {
@@ -106,15 +207,10 @@ function clampFunds(v) {
 }
 
 function onRoom(room) {
-    if (!room) { if (o.code) { alert("部屋が閉じられました"); } leaveRoom(); return; }
+    if (!room) { if (o.code) { alert("部屋が閉じられました"); } doLeave(); return; }
     o.room = room;
     const players = room.players || {};
-    if (!players[uid]) {
-        if (o.unsub) o.unsub();
-        o.unsub = null; o.code = null;
-        showScreen("screen-online-home");
-        return;
-    }
+    if (!players[uid]) { doLeave(); return; }
 
     if (room.horseSeed && o.engineSeed !== room.horseSeed) {
         o.engine = buildRace(room.horseSeed);
@@ -261,7 +357,7 @@ function maybeShowResult(room) {
         primaryLabel: o.isHost ? "次のレースへ" : "",
         onPrimary: o.isHost ? hostStartBetting : null,
         secondaryLabel: "退出する",
-        onSecondary: leaveRoom,
+        onSecondary: onLeaveClick,
         note: o.isHost ? "" : "ホストが次のレースを始めるのを待っています…",
     });
 }

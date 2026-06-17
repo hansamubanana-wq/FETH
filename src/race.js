@@ -2,9 +2,10 @@
 const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
 const SPEED_NOISE = 110;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
 const TRACK_LEN = 820;    // 1周の距離（内部単位）
-const FORM_SPREAD = 0.34; // レースごとの「調子」のばらつき(±34%)
+const FORM_SPREAD = 0.46; // レースごとの「調子」のばらつき(±46%)。大きいほど波乱(番狂わせ)が増える
 const SIM_DT = 1 / 60;    // 事前計算の固定タイムステップ(s)
-const RACE_DURATION = 40; // 再生にかける秒数（演出尺。結果・オッズには影響しない）
+const RACE_DURATION = 40; // 1着馬がゴールするまでの秒数（演出尺）
+const TAIL_DURATION = 7;  // 1着後、残りの馬が全員ゴールするまでの秒数（早送り）
 
 // レースごとの実力値。能力(power)にそのレース限定の「調子」を掛ける。
 export function rollPerf(power, rng) {
@@ -104,6 +105,8 @@ export class Race {
         this._dist = horses.map(() => 0); // 各馬の走行距離(0..TRACK_LEN)
         // 1着馬がゴールするまでのシミュ時間。これを RACE_DURATION 秒で再生する
         this.winnerTime = raceData.finishTime[raceData.order[0]];
+        // 最後の馬がゴールするまでのシミュ時間（全員完走の判定用）
+        this.lastTime = raceData.finishTime[raceData.order[raceData.order.length - 1]];
     }
 
     start() {
@@ -117,12 +120,20 @@ export class Race {
 
     _loop(now) {
         const elapsed = (now - this._startWall) / 1000;
-        const { frames } = this.data;
+        const { frames, dt } = this.data;
         const last = frames.length - 1;
-        // 1着馬が RACE_DURATION 秒でゴールするようにシミュ時間へ変換する
-        const progress = Math.min(1, elapsed / RACE_DURATION);
-        const simT = progress * this.winnerTime;
-        const fpos = Math.min(last, simT / this.data.dt);
+
+        // 区間1: 1着馬が RACE_DURATION 秒でゴール
+        // 区間2: その後、残りの馬が TAIL_DURATION 秒で全員ゴール（早送り）
+        let simT;
+        if (elapsed <= RACE_DURATION) {
+            simT = (elapsed / RACE_DURATION) * this.winnerTime;
+        } else {
+            const span = Math.max(0.001, this.lastTime - this.winnerTime);
+            simT = this.winnerTime + ((elapsed - RACE_DURATION) / TAIL_DURATION) * span;
+        }
+        const allDone = simT >= this.lastTime;
+        const fpos = Math.min(last, Math.min(simT, this.lastTime) / dt);
         const f0 = Math.floor(fpos);
         const f1 = Math.min(last, f0 + 1);
         const alpha = fpos - f0;
@@ -132,8 +143,8 @@ export class Race {
         this._draw(elapsed);
         if (this.onTick) this.onTick(this._currentOrder());
 
-        if (progress >= 1) {
-            // 1着馬がゴール。他馬は走行中のまま結果へ
+        if (allDone) {
+            // 全馬ゴール → 結果へ
             if (this.onFinish) {
                 const cb = this.onFinish;
                 this.onFinish = null;
