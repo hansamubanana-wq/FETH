@@ -57,7 +57,7 @@ export function simulateRaceData(horses, rng) {
             if (r.x >= TRACK_LEN) {
                 const over = r.x - TRACK_LEN;
                 finishTime[i] = time - over / Math.max(1, sp); // ライン到達を補間
-                r.x = TRACK_LEN;
+                r.x = TRACK_LEN;  // ゴール線で停止
                 r.done = true;
                 order.push(i);
             }
@@ -65,9 +65,9 @@ export function simulateRaceData(horses, rng) {
     }
     frames.push(runners.map((r) => r.x)); // 最終フレーム
 
-    // 着差（1着と2着の時間差）
-    const sorted = [...order].sort((a, b) => finishTime[a] - finishTime[b]);
-    const gap = sorted.length >= 2 ? Math.abs(finishTime[sorted[1]] - finishTime[sorted[0]]) : 999;
+    // 着順は着差（到達時間）で厳密に並べる（同一ステップ内の取りこぼし防止）
+    order.sort((a, b) => finishTime[a] - finishTime[b]);
+    const gap = order.length >= 2 ? Math.abs(finishTime[order[1]] - finishTime[order[0]]) : 999;
 
     return { dt: SIM_DT, frames, order, finishTime, gap, trackLen: TRACK_LEN };
 }
@@ -155,11 +155,21 @@ export class Race {
         this._raf = requestAnimationFrame((t) => this._loop(t));
     }
 
-    // 現在の走行距離順（先頭→最後）の馬配列
+    // 現在の順位（先頭→最後）の馬配列。
+    // ゴール済みの馬は着差(finishTime)順で前に、走行中の馬は距離順で後ろに並べる。
+    // これで画面の順位と最終着順が一致する。
     _currentOrder() {
+        const ft = this.data.finishTime;
+        const fin = (i) => this._dist[i] >= TRACK_LEN - 0.5;
         return this.horses
             .map((h, i) => i)
-            .sort((a, b) => this._dist[b] - this._dist[a])
+            .sort((a, b) => {
+                const af = fin(a), bf = fin(b);
+                if (af && bf) return ft[a] - ft[b];
+                if (af) return -1;
+                if (bf) return 1;
+                return this._dist[b] - this._dist[a];
+            })
             .map((i) => this.horses[i]);
     }
 

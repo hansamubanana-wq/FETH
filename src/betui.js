@@ -93,9 +93,13 @@ function renderHorses() {
         div.className = "horse-pick";
         div.style.borderColor = h.color;
 
-        let oddsLine = "";
+        // どの賭け式でも各馬にオッズを表示する。
+        // 1頭選び（単勝/複勝）はその式のオッズ、複数頭の式は人気の目安として単勝オッズを出す。
+        let oddsLine;
         if (type.nPick === 1) {
-            oddsLine = `<div class="odds">${type.label}オッズ ${cur.engine.oddsFor(type.key, [h.id])}倍</div>`;
+            oddsLine = `<div class="odds">${type.label} ${cur.engine.oddsFor(type.key, [h.id])}倍</div>`;
+        } else {
+            oddsLine = `<div class="odds">単勝 ${cur.engine.oddsFor("win", [h.id])}倍</div>`;
         }
         const selPos = cur.selection.indexOf(h.id);
         if (selPos >= 0) div.classList.add("selected");
