@@ -51,7 +51,7 @@ function addRecent(code) {
 const o = {
     code: null, isHost: false, room: null,
     engine: null, engineSeed: null, unsub: null,
-    betShownRound: -1, playedRound: -1, settledRound: -1, raceStartedRound: -1, resultShownRound: -1,
+    betShownRound: -1, playedRound: -1, finishedRound: -1, settledRound: -1, raceStartedRound: -1, resultShownRound: -1,
 };
 
 function roomDoc() { return fb.doc(fb.db, "rooms", o.code); }
@@ -333,13 +333,14 @@ function hostStartRace(room) {
 async function handleRace(room) {
     if (!room.raceSeed || !o.engine) return;
     if (o.playedRound === room.round) return;
-    o.playedRound = room.round;
+    o.playedRound = room.round; // 再生開始ガード（多重起動防止）
 
     const ps0 = room.players || {};
     await playRace(o.engine.horses, room.raceSeed, {
         engine: o.engine,
         players: Object.keys(ps0).map((id) => ({ name: ps0[id].name, tickets: ps0[id].tickets || [] })),
     });
+    o.finishedRound = room.round; // 再生完了（ここまで来て初めて精算/結果表示OK）
     trySettle();
     maybeShowResult(o.room);
 }
@@ -350,7 +351,7 @@ function trySettle() {
     const room = o.room;
     if (!room || room.phase !== "race") return;
     if (!o.isHost || !o.engine) return;
-    if (o.playedRound !== room.round) return;       // 自分の演出がまだ終わっていない
+    if (o.finishedRound !== room.round) return;      // 自分の演出がまだ終わっていない
     if (o.settledRound === room.round) return;
     o.settledRound = room.round;
 
@@ -366,14 +367,14 @@ function trySettle() {
 
 // ---- 結果 ----
 function handleResult(room) {
-    // このラウンドのレースを再生した人は結果を表示。途中参加で未再生の人は待機。
-    if (o.playedRound === room.round && o.engine) maybeShowResult(room);
+    // このラウンドのレースを再生し終えた人は結果を表示。途中参加で未再生の人は待機。
+    if (o.finishedRound === room.round && o.engine) maybeShowResult(room);
     else showWait(room, "次のレースを待っています（観戦中）");
 }
 
 function maybeShowResult(room) {
     if (!room || room.phase !== "result") return;
-    if (o.playedRound !== room.round) return;
+    if (o.finishedRound !== room.round) return;
     if (o.resultShownRound === room.round) return;
     if (!o.engine) return;
     o.resultShownRound = room.round;
