@@ -25,9 +25,18 @@ export const STYLES = {
 };
 const STYLE_KEYS = Object.keys(STYLES);
 
-// 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)と脚質を付与。
-// rng を渡すと決定論的に生成できる（オンラインで全端末を一致させる用）。
-export function drawHorses(n, rng = Math.random) {
+// 特殊能力（ブースト）。レース中の進行度 t がトリガー区間に入ると速度が boost 分上がる。
+// 発動タイミングはレースごとに乱数でズレるので、毎回違う見せ場が生まれる。
+export const ABILITIES = [
+    { key: "dash", label: "好スタート", lo: 0.00, hi: 0.08, dur: 0.16, boost: 0.30 },
+    { key: "spurt", label: "末脚", lo: 0.60, hi: 0.76, dur: 0.22, boost: 0.42 },
+    { key: "makuri", label: "まくり", lo: 0.38, hi: 0.54, dur: 0.20, boost: 0.34 },
+    { key: "ippatsu", label: "一発", lo: 0.20, hi: 0.74, dur: 0.15, boost: 0.55 },
+];
+
+// 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)・脚質・特殊能力を付与。
+// rng を渡すと決定論的に生成できる。names を渡すと馬名を上書きできる（共有プール用）。
+export function drawHorses(n, rng = Math.random, names = null) {
     const pool = [...HORSE_POOL];
     for (let i = pool.length - 1; i > 0; i--) {
         const j = Math.floor(rng() * (i + 1));
@@ -35,17 +44,19 @@ export function drawHorses(n, rng = Math.random) {
     }
     return pool.slice(0, n).map((h, i) => {
         // 基礎能力。馬ごとの差を出しつつ、開きすぎないよう幅は控えめに。
-        // 0.90 〜 1.18 程度。レースごとの「調子」も加わるので接戦になりやすい。
         const power = 0.90 + rng() * 0.28;
         const style = STYLES[STYLE_KEYS[Math.floor(rng() * STYLE_KEYS.length)]];
+        // 約65%の馬が特殊能力を持つ
+        const ability = rng() < 0.65 ? ABILITIES[Math.floor(rng() * ABILITIES.length)] : null;
         return {
             id: i,
-            name: h.name,
+            name: (names && names[i]) ? names[i] : h.name,
             emoji: h.emoji,
             color: h.color,
             power,
             style,
-            backers: [], // この馬に賭けたプレイヤー名
+            ability,
+            backers: [],
         };
     });
 }

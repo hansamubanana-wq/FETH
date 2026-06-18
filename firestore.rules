@@ -5,5 +5,9 @@ service cloud.firestore {
     match /rooms/{code} {
       allow read, write: if true;
     }
+    // 馬名の共有プール
+    match /meta/{doc} {
+      allow read, write: if true;
+    }
   }
 }

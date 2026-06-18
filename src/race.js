@@ -1,8 +1,8 @@
 // レースの基礎パラメータ。事前計算シミュレーションと再生で共有する。
 const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
-const SPEED_NOISE = 110;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
+const SPEED_NOISE = 100;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
 const TRACK_LEN = 820;    // 1周の距離（内部単位）
-const FORM_SPREAD = 0.46; // レースごとの「調子」のばらつき(±46%)。大きいほど波乱(番狂わせ)が増える
+const FORM_SPREAD = 0.34; // レースごとの「調子」のばらつき(±34%)。大きいほど波乱(番狂わせ)が増える
 const SIM_DT = 1 / 60;    // 事前計算の固定タイムステップ(s)
 const RACE_DURATION = 40; // 1着馬がゴールするまでの秒数（演出尺）
 const TAIL_DURATION = 7;  // 1着後、残りの馬が全員ゴールするまでの秒数（早送り）
@@ -12,20 +12,30 @@ export function rollPerf(power, rng) {
     return power * (1 + (rng() - 0.5) * 2 * FORM_SPREAD);
 }
 
-// 1ステップの瞬間速度。perf を基準に、脚質(pace)と緩急(noise)を掛ける。
-function computeSpeed(perf, style, t, rng) {
-    const pace = style.profile(Math.min(1, Math.max(0, t)));
-    return Math.max(30, SPEED_BASE * perf * pace + (rng() - 0.5) * 2 * SPEED_NOISE);
+// レース開始時に1頭ぶんの状態を作る。特殊能力の発動位置(trigger)もここで決める。
+function initRunner(h, rng) {
+    const ab = h.ability;
+    const trigger = ab ? ab.lo + rng() * (ab.hi - ab.lo) : -1;
+    return { id: h.id, perf: rollPerf(h.power, rng), style: h.style, ability: ab, trigger, x: 0, done: false };
+}
+
+// 1ステップの瞬間速度。perf を基準に、脚質(pace)・特殊能力ブースト・緩急(noise)を掛ける。
+function computeSpeed(r, t, rng) {
+    let pace = r.style.profile(Math.min(1, Math.max(0, t)));
+    if (r.ability && t >= r.trigger && t <= r.trigger + r.ability.dur) {
+        pace *= (1 + r.ability.boost); // ブースト発動中
+    }
+    return Math.max(30, SPEED_BASE * r.perf * pace + (rng() - 0.5) * 2 * SPEED_NOISE);
 }
 
 // 着順(horse.id配列)だけを返す軽量シミュレーション。オッズ算出用。
 export function simulateOrder(horses, rng) {
-    const runners = horses.map((h) => ({ id: h.id, perf: rollPerf(h.power, rng), style: h.style, x: 0, done: false }));
+    const runners = horses.map((h) => initRunner(h, rng));
     const order = [];
     while (order.length < runners.length) {
         for (const r of runners) {
             if (r.done) continue;
-            r.x += computeSpeed(r.perf, r.style, r.x / TRACK_LEN, rng) * SIM_DT;
+            r.x += computeSpeed(r, r.x / TRACK_LEN, rng) * SIM_DT;
             if (r.x >= TRACK_LEN) {
                 r.done = true;
                 order.push(r.id);
@@ -36,11 +46,10 @@ export function simulateOrder(horses, rng) {
 }
 
 // レース全体を固定タイムステップで事前計算する。
-// 返り値: 全フレームの各馬位置・着順・着差。これを実時間で再生するので
-// 端末のフレームレートに依存せず、同じseedなら全端末で同一の映像になる。
+// 返り値: 全フレームの各馬位置・着順・着差・特殊能力の発動区間。
 export function simulateRaceData(horses, rng) {
     const n = horses.length;
-    const runners = horses.map((h) => ({ perf: rollPerf(h.power, rng), style: h.style, x: 0, done: false }));
+    const runners = horses.map((h) => initRunner(h, rng));
     const frames = [];      // frames[f][i] = 馬iのx
     const finishTime = new Array(n).fill(null);
     const order = [];       // ゴール順の馬index
@@ -52,7 +61,7 @@ export function simulateRaceData(horses, rng) {
         for (let i = 0; i < n; i++) {
             const r = runners[i];
             if (r.done) continue;
-            const sp = computeSpeed(r.perf, r.style, r.x / TRACK_LEN, rng);
+            const sp = computeSpeed(r, r.x / TRACK_LEN, rng);
             r.x += sp * SIM_DT;
             if (r.x >= TRACK_LEN) {
                 const over = r.x - TRACK_LEN;
@@ -69,7 +78,12 @@ export function simulateRaceData(horses, rng) {
     order.sort((a, b) => finishTime[a] - finishTime[b]);
     const gap = order.length >= 2 ? Math.abs(finishTime[order[1]] - finishTime[order[0]]) : 999;
 
-    return { dt: SIM_DT, frames, order, finishTime, gap, trackLen: TRACK_LEN };
+    // 特殊能力の発動区間（進行度 t）を表示用に保持
+    const abFrom = runners.map((r) => (r.ability ? r.trigger : -1));
+    const abTo = runners.map((r) => (r.ability ? r.trigger + r.ability.dur : -1));
+    const abLabel = runners.map((r) => (r.ability ? r.ability.label : null));
+
+    return { dt: SIM_DT, frames, order, finishTime, gap, trackLen: TRACK_LEN, abFrom, abTo, abLabel };
 }
 
 // 事前計算した raceData を canvas に実時間で再生するプレイヤー（オーバルコース1周）。
@@ -271,6 +285,8 @@ export class Race {
         const facing = Math.atan2((this.ry + off) * Math.cos(ang), -(this.rx + off) * Math.sin(ang));
         const moving = dist < TRACK_LEN - 0.5;
         const gallop = elapsed * 16 + i;
+        const t = dist / TRACK_LEN;
+        const boosting = moving && this.data.abLabel[i] && t >= this.data.abFrom[i] && t <= this.data.abTo[i];
 
         // 影
         ctx.fillStyle = "rgba(0,0,0,0.28)";
@@ -287,6 +303,23 @@ export class Race {
                 ctx.fillStyle = `rgba(220,200,170,${0.18 / d})`;
                 ctx.beginPath();
                 ctx.arc(bx, by, puff, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // ブースト発動中のオーラ＋炎
+        if (boosting) {
+            const pulse = 1 + Math.sin(elapsed * 30) * 0.15;
+            ctx.fillStyle = "rgba(255,140,0,0.30)";
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, 22 * pulse, 16 * pulse, 0, 0, Math.PI * 2);
+            ctx.fill();
+            for (let d = 1; d <= 4; d++) {
+                const fx = p.x - Math.cos(facing) * (12 + d * 5);
+                const fy = p.y - Math.sin(facing) * (12 + d * 5);
+                ctx.fillStyle = `rgba(255,${120 + d * 20},0,${0.5 / d})`;
+                ctx.beginPath();
+                ctx.arc(fx, fy, 6 - d, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
@@ -357,6 +390,16 @@ export class Race {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(String(h.id + 1), p.x, p.y - 15);
+
+        // ブースト名のポップ
+        if (boosting) {
+            ctx.fillStyle = "#ff8c00";
+            ctx.font = "bold 12px sans-serif";
+            ctx.strokeStyle = "rgba(0,0,0,0.7)";
+            ctx.lineWidth = 3;
+            ctx.strokeText("⚡" + this.data.abLabel[i], p.x, p.y - 28);
+            ctx.fillText("⚡" + this.data.abLabel[i], p.x, p.y - 28);
+        }
     }
 
     _drawFinishLine() {

@@ -10,8 +10,9 @@ export const PLACE_N = 3;    // 8頭なので複勝・ワイドは3着以内
 const SIM_RUNS = 3000;       // オッズ算出のシミュレーション回数
 
 // horseSeed から、その回の馬・賭け式・オッズ計算機を作る。
-export function buildRace(horseSeed) {
-    const horses = drawHorses(NUM_HORSES, makeRng(horseSeed));
+// names を渡すと馬名を上書きできる（共有プールの名前を全端末で一致させる用）。
+export function buildRace(horseSeed, names = null) {
+    const horses = drawHorses(NUM_HORSES, makeRng(horseSeed), names);
     const betTypes = buildBetTypes(PLACE_N).filter((t) => NUM_HORSES >= t.nPick);
     const byKey = Object.fromEntries(betTypes.map((t) => [t.key, t]));
 

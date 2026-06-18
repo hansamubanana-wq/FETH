@@ -712,6 +712,34 @@ button.ghost {
     font-size: 0.85rem;
 }
 
+.name-reg {
+    margin-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 14px;
+}
+
+.name-reg-row {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.name-reg-row input {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #2f4a73;
+    background: var(--bg2);
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.name-reg-row button {
+    flex: 0 0 auto;
+    padding: 10px 18px;
+    margin: 0;
+}
+
 .room-chip {
     padding: 8px 16px;
     border-radius: 999px;

@@ -3,6 +3,7 @@ import { buildRace, settleTickets, bestPerType, NUM_HORSES } from "./engine.js";
 import { startBetPanel } from "./betui.js";
 import { playRace, renderResult } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
+import { pickNames } from "./names.js";
 
 const MIN_PLAYERS = 1, MAX_PLAYERS = 8;
 const FUNDS_MIN = 500, FUNDS_MAX = 10000, FUNDS_STEP = 100;
@@ -49,7 +50,7 @@ function setupCounter(outId, minusId, plusId, key, min, max, step) {
 }
 
 function startRound() {
-    s.engine = buildRace(randomSeed());
+    s.engine = buildRace(randomSeed(), pickNames(NUM_HORSES));
     s.bets = [];
     s.picker = 0;
     renderPicker();

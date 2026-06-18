@@ -2,12 +2,13 @@
 // 全端末は horseSeed / raceSeed から決定論的に同じ馬・同じレース映像を作る。
 // Firebase SDK はオンラインに入ったときだけ動的に読み込む（ローカルモードを邪魔しない）。
 import { firebaseConfig } from "./firebase-config.js";
-import { buildRace, settleTickets, bestPerType } from "./engine.js";
+import { buildRace, settleTickets, bestPerType, NUM_HORSES } from "./engine.js";
 import { startBetPanel } from "./betui.js";
 import { playRace, renderResult } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
 import { simulateRaceData } from "./race.js";
 import { makeRng } from "./rng.js";
+import { mergeNames, pickNames, addName, setRemoteAdder, customCount } from "./names.js";
 
 const FB_VER = "10.12.2";
 const configured = !!firebaseConfig.projectId;
@@ -22,7 +23,7 @@ async function ensureDb() {
         db,
         doc: fsMod.doc, setDoc: fsMod.setDoc, updateDoc: fsMod.updateDoc,
         getDoc: fsMod.getDoc, onSnapshot: fsMod.onSnapshot,
-        deleteField: fsMod.deleteField, deleteDoc: fsMod.deleteDoc,
+        deleteField: fsMod.deleteField, deleteDoc: fsMod.deleteDoc, arrayUnion: fsMod.arrayUnion,
     };
     return fb;
 }
@@ -69,6 +70,14 @@ export function initOnline() {
     document.getElementById("lobby-invite").addEventListener("click", shareInvite);
     document.querySelectorAll("[data-leave]").forEach((b) => b.addEventListener("click", onLeaveClick));
 
+    // 馬名の登録（サーバー保存）
+    setRemoteAdder(persistName);
+    const addBtn = document.getElementById("horse-name-add");
+    if (addBtn) addBtn.addEventListener("click", () => {
+        const inp = document.getElementById("horse-name-input");
+        if (addName(inp.value)) { inp.value = ""; updateNameCount(); }
+    });
+
     // アプリ切替・誤操作で抜けないように：在室中はページ離脱を警告
     window.addEventListener("beforeunload", (e) => {
         if (o.code) { e.preventDefault(); e.returnValue = ""; }
@@ -81,7 +90,35 @@ export function enterOnlineHome() {
     document.getElementById("create-name").value = n;
     document.getElementById("join-name").value = n;
     renderRecent();
+    updateNameCount();
+    preloadNames();
     showScreen("screen-online-home");
+}
+
+function updateNameCount() {
+    const el = document.getElementById("horse-name-count");
+    if (el) el.textContent = `登録済み ${customCount()} 件`;
+}
+
+// サーバーの馬名プールを取得してローカルに統合
+export async function preloadNames() {
+    if (!configured) return;
+    try {
+        await ensureDb();
+        const snap = await fb.getDoc(fb.doc(fb.db, "meta", "horseNames"));
+        if (snap.exists()) mergeNames(snap.data().names || []);
+        updateNameCount();
+    } catch (e) { /* オフライン時はローカルのみ */ }
+}
+
+// 馬名をサーバーへ保存（重複は arrayUnion が弾く）
+async function persistName(name) {
+    if (!configured) return;
+    try {
+        await ensureDb();
+        await fb.setDoc(fb.doc(fb.db, "meta", "horseNames"),
+            { names: fb.arrayUnion(name) }, { merge: true });
+    } catch (e) { /* 失敗してもローカルには残る */ }
 }
 
 // 最近遊んだ合言葉（フレンドと使った部屋）をワンタップ参加用に表示
@@ -229,7 +266,7 @@ function onRoom(room) {
     o.isHost = (room.host === uid);
 
     if (room.horseSeed && o.engineSeed !== room.horseSeed) {
-        o.engine = buildRace(room.horseSeed);
+        o.engine = buildRace(room.horseSeed, room.names || null);
         o.engineSeed = room.horseSeed;
     }
 
@@ -285,7 +322,7 @@ function renderPlayerList(elId, room, statusFn) {
 // ---- ベット ----
 function hostStartBetting() {
     const round = (o.room.round || 0) + 1;
-    const updates = { phase: "betting", round, horseSeed: randomSeed(), raceSeed: 0 };
+    const updates = { phase: "betting", round, horseSeed: randomSeed(), raceSeed: 0, names: pickNames(NUM_HORSES) };
     Object.keys(o.room.players || {}).forEach((id) => {
         updates[`players.${id}.betDone`] = false;
         updates[`players.${id}.tickets`] = [];

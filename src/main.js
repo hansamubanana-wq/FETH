@@ -2,7 +2,7 @@
 import { showScreen } from "./ui.js";
 import { initBetUI } from "./betui.js";
 import { initLocal, enterLocalSetup } from "./local.js";
-import { initOnline, enterOnlineHome, reconnectIfPossible, inRoom, requestLeave } from "./online.js";
+import { initOnline, enterOnlineHome, reconnectIfPossible, inRoom, requestLeave, preloadNames } from "./online.js";
 
 // ---- ズーム禁止 ----
 document.addEventListener("gesturestart", (e) => e.preventDefault());
@@ -38,6 +38,9 @@ document.querySelectorAll("[data-exit]").forEach((b) =>
     }));
 document.getElementById("online-create-open").addEventListener("click", () => showScreen("screen-create"));
 document.getElementById("online-join-open").addEventListener("click", () => showScreen("screen-join"));
+
+// 馬名の共有プールをバックグラウンドで取得（ローカルでも使えるように）
+preloadNames();
 
 // 招待リンク or 前回の在室ルームがあれば自動で復帰、なければホーム
 reconnectIfPossible()
