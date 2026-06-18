@@ -110,7 +110,8 @@ function renderHorses() {
             <div class="emoji" style="filter:drop-shadow(0 0 6px ${h.color})">${h.emoji}</div>
             <div class="hname">${h.id + 1}. ${h.name}</div>
             ${oddsLine}
-            <div class="style" title="${h.style.desc}">${h.style.label}${h.ability ? " ⚡" + h.ability.label : ""}</div>
+            <div class="style" title="${h.style.desc}">${h.style.label}</div>
+            <div class="ability" title="${h.ability.desc}">⚡${h.ability.label} <span class="proc">${Math.round(h.ability.proc * 100)}%</span></div>
         `;
         div.addEventListener("click", () => tapHorse(h));
         grid.appendChild(div);

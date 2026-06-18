@@ -460,6 +460,18 @@ button.ghost {
     font-weight: 700;
 }
 
+.horse-pick .ability {
+    margin-top: 5px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #ffb74d;
+}
+
+.horse-pick .ability .proc {
+    color: var(--muted);
+    font-weight: 600;
+}
+
 .horse-pick.taken {
     opacity: 0.4;
     cursor: not-allowed;

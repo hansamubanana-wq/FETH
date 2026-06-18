@@ -12,18 +12,22 @@ export function rollPerf(power, rng) {
     return power * (1 + (rng() - 0.5) * 2 * FORM_SPREAD);
 }
 
-// レース開始時に1頭ぶんの状態を作る。特殊能力の発動位置(trigger)もここで決める。
+// レース開始時に1頭ぶんの状態を作る。発動可否(active)と発動位置(trigger)を決める。
 function initRunner(h, rng) {
     const ab = h.ability;
-    const trigger = ab ? ab.lo + rng() * (ab.hi - ab.lo) : -1;
-    return { id: h.id, perf: rollPerf(h.power, rng), style: h.style, ability: ab, trigger, x: 0, done: false };
+    const active = rng() < ab.proc;                 // 今回そのレースで発動するか
+    const trigger = ab.lo + rng() * (ab.hi - ab.lo); // 発動位置
+    return { id: h.id, perf: rollPerf(h.power, rng), style: h.style, ability: ab, active, trigger, x: 0, done: false };
 }
 
-// 1ステップの瞬間速度。perf を基準に、脚質(pace)・特殊能力ブースト・緩急(noise)を掛ける。
+// 1ステップの瞬間速度。perf を基準に、脚質(pace)・特殊能力・緩急(noise)を掛ける。
 function computeSpeed(r, t, rng) {
     let pace = r.style.profile(Math.min(1, Math.max(0, t)));
-    if (r.ability && t >= r.trigger && t <= r.trigger + r.ability.dur) {
-        pace *= (1 + r.ability.boost); // ブースト発動中
+    pace *= (r.ability.penalty || 1); // 常時デメリット
+    if (r.active) {
+        if (t >= r.trigger && t <= r.trigger + r.ability.dur) pace *= (1 + r.ability.boost); // 発動中ブースト
+    } else {
+        pace *= (r.ability.fizzle || 1); // 不発の日のデメリット
     }
     return Math.max(30, SPEED_BASE * r.perf * pace + (rng() - 0.5) * 2 * SPEED_NOISE);
 }
@@ -78,10 +82,10 @@ export function simulateRaceData(horses, rng) {
     order.sort((a, b) => finishTime[a] - finishTime[b]);
     const gap = order.length >= 2 ? Math.abs(finishTime[order[1]] - finishTime[order[0]]) : 999;
 
-    // 特殊能力の発動区間（進行度 t）を表示用に保持
-    const abFrom = runners.map((r) => (r.ability ? r.trigger : -1));
-    const abTo = runners.map((r) => (r.ability ? r.trigger + r.ability.dur : -1));
-    const abLabel = runners.map((r) => (r.ability ? r.ability.label : null));
+    // 発動した能力の区間（進行度 t）を表示用に保持（不発の馬は -1/null）
+    const abFrom = runners.map((r) => (r.active ? r.trigger : -1));
+    const abTo = runners.map((r) => (r.active ? r.trigger + r.ability.dur : -1));
+    const abLabel = runners.map((r) => (r.active ? r.ability.label : null));
 
     return { dt: SIM_DT, frames, order, finishTime, gap, trackLen: TRACK_LEN, abFrom, abTo, abLabel };
 }
