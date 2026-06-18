@@ -1,5 +1,5 @@
 // ローカル（1台で順番に回す）モードのコントローラ。
-import { buildRace, settleTickets, bestBet, NUM_HORSES } from "./engine.js";
+import { buildRace, settleTickets, bestPerType, NUM_HORSES } from "./engine.js";
 import { startBetPanel } from "./betui.js";
 import { playRace, renderResult } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
@@ -104,13 +104,21 @@ async function runRaceAndResult() {
     const standings = [...s.players].sort((a, b) => b.balance - a.balance)
         .map((p) => ({ name: p.name, balance: p.balance }));
 
+    // 誰かが破産（残高0以下）したらゲーム終了→ランキング表示→リセットしてやり直し
+    const bankrupt = s.players.some((p) => p.balance <= 0);
+
     renderResult(ordered, payoutRows, standings, {
-        primaryLabel: "同じメンバーでもう一度",
-        onPrimary: () => { s.firstRound = false; startRound(); },
+        primaryLabel: bankrupt ? "リセットしてもう一度" : "同じメンバーでもう一度",
+        onPrimary: () => {
+            if (bankrupt) s.players.forEach((p) => { p.balance = s.startingFunds; });
+            s.firstRound = false;
+            startRound();
+        },
         secondaryLabel: "最初から（残高リセット）",
         onSecondary: () => enterLocalSetup(),
-        note: "",
-        bestBet: bestBet(orderIds, s.engine),
+        note: bankrupt ? "破産者が出たので、全員の残高をリセットして再戦できます。" : "",
+        gameOver: bankrupt,
+        bestBets: bestPerType(orderIds, s.engine),
     });
 }
 

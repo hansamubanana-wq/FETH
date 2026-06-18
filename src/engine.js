@@ -48,6 +48,43 @@ export function bestBet(orderIds, engine) {
     return { label: best.type.label, combo, odds: best.odds };
 }
 
+// このレース結果で、各賭け式ごとの「一番儲かる的中買い目」を求める。
+// 返り値: [{ label, combo, odds }]（単勝→…→3連単の順）。
+export function bestPerType(orderIds, engine) {
+    const { byKey, oddsFor } = engine;
+    const [o0, o1, o2] = orderIds;
+    const top = orderIds.slice(0, PLACE_N);
+    const rows = [];
+
+    const fixed = (key, sel) => {
+        const t = byKey[key];
+        if (!t) return;
+        rows.push({ label: t.label, combo: sel.map((id) => id + 1).join(t.ordered ? "→" : "・"), odds: oddsFor(key, sel) });
+    };
+    // 複勝・ワイドのように的中候補が複数ある式は、最高オッズの組を選ぶ
+    const best = (key, candidates) => {
+        const t = byKey[key];
+        if (!t) return;
+        let b = null;
+        for (const sel of candidates) {
+            const od = oddsFor(key, sel);
+            if (!b || od > b.od) b = { sel, od };
+        }
+        rows.push({ label: t.label, combo: b.sel.map((id) => id + 1).join(t.ordered ? "→" : "・"), odds: b.od });
+    };
+
+    fixed("win", [o0]);
+    best("place", top.map((h) => [h]));
+    fixed("quinella", [o0, o1]);
+    fixed("exacta", [o0, o1]);
+    const pairs = [];
+    for (let i = 0; i < top.length; i++) for (let j = i + 1; j < top.length; j++) pairs.push([top[i], top[j]]);
+    best("wide", pairs);
+    fixed("trio", [o0, o1, o2]);
+    fixed("trifecta", [o0, o1, o2]);
+    return rows;
+}
+
 // 複数枚の馬券をまとめて精算する。tickets = [{typeKey,sel,amount,odds}, ...]。
 // 返り値 { delta, detail }（delta は合計の増減）。
 export function settleTickets(tickets, orderIds, horses, byKey) {

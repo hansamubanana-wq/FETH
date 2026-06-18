@@ -180,14 +180,23 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
         st.appendChild(li);
     });
 
-    // 最適だった買い目（最高配当）
+    // 各賭け式ごとの最適だった買い目
     const bb = document.getElementById("best-bet");
-    if (buttons.bestBet) {
-        bb.innerHTML = `💡 最適だった買い目： <b>${buttons.bestBet.label} [${buttons.bestBet.combo}]</b> <span class="bb-odds">${buttons.bestBet.odds}倍</span>`;
+    if (buttons.bestBets && buttons.bestBets.length) {
+        bb.innerHTML = `<div class="bb-title">💡 各賭け式の最適だった買い目</div>` +
+            buttons.bestBets.map((r) =>
+                `<div class="bb-row"><span>${r.label} [${r.combo}]</span><span class="bb-odds">${r.odds}倍</span></div>`
+            ).join("");
         bb.classList.remove("hidden");
     } else {
         bb.classList.add("hidden");
     }
+
+    // 破産者が出たらゲーム終了バナー＋見出し変更
+    const title = document.getElementById("result-title");
+    if (title) title.textContent = buttons.gameOver ? "🏆 最終ランキング" : "🏁 結果発表";
+    const banner = document.getElementById("gameover-banner");
+    if (banner) banner.classList.toggle("hidden", !buttons.gameOver);
 
     const primary = document.getElementById("rematch");
     const secondary = document.getElementById("back-to-setup");

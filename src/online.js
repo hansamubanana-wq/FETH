@@ -2,7 +2,7 @@
 // 全端末は horseSeed / raceSeed から決定論的に同じ馬・同じレース映像を作る。
 // Firebase SDK はオンラインに入ったときだけ動的に読み込む（ローカルモードを邪魔しない）。
 import { firebaseConfig } from "./firebase-config.js";
-import { buildRace, settleTickets, bestBet } from "./engine.js";
+import { buildRace, settleTickets, bestPerType } from "./engine.js";
 import { startBetPanel } from "./betui.js";
 import { playRace, renderResult } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
@@ -358,9 +358,24 @@ function trySettle() {
     const orderIds = orderFromSeed(room).map((h) => h.id);
     const ps = room.players || {};
     const updates = { phase: "result" };
+    let bankrupt = false;
     Object.keys(ps).forEach((id) => {
         const res = settleTickets(ps[id].tickets, orderIds, o.engine.horses, o.engine.byKey);
-        updates[`players.${id}.balance`] = ps[id].balance + res.delta;
+        const nb = ps[id].balance + res.delta;
+        updates[`players.${id}.balance`] = nb;
+        if (nb <= 0) bankrupt = true;
+    });
+    updates.gameOver = bankrupt; // 破産者が出たらゲーム終了
+    fb.updateDoc(roomDoc(), updates);
+}
+
+// 破産でゲーム終了 → ホストが全員の残高をリセットしてロビーへ戻す
+function hostReset() {
+    const updates = { phase: "lobby", gameOver: false, raceSeed: 0 };
+    Object.keys(o.room.players || {}).forEach((id) => {
+        updates[`players.${id}.balance`] = o.room.funds;
+        updates[`players.${id}.betDone`] = false;
+        updates[`players.${id}.tickets`] = [];
     });
     fb.updateDoc(roomDoc(), updates);
 }
@@ -391,13 +406,25 @@ function maybeShowResult(room) {
         .map((id) => ({ name: ps[id].name, balance: ps[id].balance }))
         .sort((a, b) => b.balance - a.balance);
 
+    const gameOver = !!room.gameOver;
+    let primaryLabel = "", onPrimary = null, note = "";
+    if (gameOver) {
+        primaryLabel = o.isHost ? "リセットして再戦" : "";
+        onPrimary = o.isHost ? hostReset : null;
+        note = o.isHost ? "破産者が出たので、リセットして再戦できます。" : "ホストのリセットを待っています…";
+    } else {
+        primaryLabel = o.isHost ? "次のレースへ" : "";
+        onPrimary = o.isHost ? hostStartBetting : null;
+        note = o.isHost ? "" : "ホストが次のレースを始めるのを待っています…";
+    }
+
     renderResult(ordered, payoutRows, standings, {
-        primaryLabel: o.isHost ? "次のレースへ" : "",
-        onPrimary: o.isHost ? hostStartBetting : null,
+        primaryLabel, onPrimary,
         secondaryLabel: "退出する",
         onSecondary: onLeaveClick,
-        note: o.isHost ? "" : "ホストが次のレースを始めるのを待っています…",
-        bestBet: bestBet(orderIds, o.engine),
+        note,
+        gameOver,
+        bestBets: bestPerType(orderIds, o.engine),
     });
 }
 
