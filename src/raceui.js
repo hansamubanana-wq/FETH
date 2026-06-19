@@ -147,7 +147,9 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
     standings.forEach((p, i) => {
         const li = document.createElement("li");
         const rank = medals[i] || `${i + 1}位`;
-        li.innerHTML = `<span>${rank} ${p.name}</span><span class="coins">${p.balance} コイン</span>`;
+        const status = p.bankrupt ? " 💸破産中" : "";
+        const ready = p.readyNext ? " / OK" : "";
+        li.innerHTML = `<span>${rank} ${p.name}${status}</span><span class="coins">${p.balance} コイン${ready}</span>`;
         st.appendChild(li);
     });
 
@@ -179,8 +181,10 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
         primary.textContent = buttons.primaryLabel;
         primary.classList.remove("hidden");
         primary.onclick = buttons.onPrimary;
+        primary.disabled = !buttons.onPrimary;
     } else {
         primary.classList.add("hidden");
+        primary.disabled = false;
     }
     if (buttons.secondaryLabel) {
         secondary.textContent = buttons.secondaryLabel;

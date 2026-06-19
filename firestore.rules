@@ -9,5 +9,11 @@ service cloud.firestore {
     match /meta/{doc} {
       allow read, write: if true;
     }
+    match /users/{uid} {
+      allow read, write: if true;
+    }
+    match /invites/{uid} {
+      allow read, write: if true;
+    }
   }
 }

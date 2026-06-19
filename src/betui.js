@@ -12,6 +12,7 @@ const cur = {
     amount: 100,
     tickets: [],
     spent: 0,
+    reviveMode: false,
 };
 
 const remaining = () => cur.balance - cur.spent;
@@ -48,15 +49,18 @@ export function initBetUI() {
 }
 
 // パネルを開く。
-export function startBetPanel({ engine, balance, onComplete }) {
+export function startBetPanel({ engine, balance, onComplete, reviveMode = false }) {
     cur.engine = engine;
     cur.balance = balance;
     cur.onComplete = onComplete;
-    cur.type = engine.betTypes[0];
+    cur.reviveMode = reviveMode;
+    cur.type = reviveMode
+        ? engine.betTypes.find((t) => t.key === "trifecta") || engine.betTypes[0]
+        : engine.betTypes[0];
     cur.selection = [];
     cur.tickets = [];
     cur.spent = 0;
-    cur.amount = Math.min(BET_STEP, balance);
+    cur.amount = reviveMode ? 0 : Math.min(BET_STEP, balance);
 
     updateAmount();
     renderTabs();
@@ -73,13 +77,14 @@ function updateAmount() {
     document.getElementById("bet-amount").value = cur.amount;
 }
 function renderBalance() {
-    document.getElementById("pick-balance").textContent = remaining();
+    document.getElementById("pick-balance").textContent = cur.reviveMode ? "復活チャレンジ" : remaining();
 }
 
 function renderTabs() {
     const tabs = document.getElementById("bettype-tabs");
     tabs.innerHTML = "";
-    for (const t of cur.engine.betTypes) {
+    const types = cur.reviveMode ? cur.engine.betTypes.filter((t) => t.key === "trifecta") : cur.engine.betTypes;
+    for (const t of types) {
         const btn = document.createElement("button");
         btn.textContent = t.label;
         btn.className = t === cur.type ? "active" : "";
@@ -89,11 +94,13 @@ function renderTabs() {
         });
         tabs.appendChild(btn);
     }
-    document.getElementById("bettype-desc").textContent = cur.type.desc;
-    document.getElementById("pick-instruction").textContent = "↓ " + cur.type.instruction;
+    document.getElementById("bettype-desc").textContent = cur.reviveMode
+        ? "破産中の特別ルール：三連単を的中できれば3000コインで復活できます。外れても追加の支払いはありません。"
+        : cur.type.desc;
+    document.getElementById("pick-instruction").textContent = cur.reviveMode
+        ? "復活をかけて1着→2着→3着を選んでください"
+        : "↓ " + cur.type.instruction;
 }
-
-// メーター1本ぶんのHTML。v は 0..1。
 function meter(label, v, valText = "", cls = "") {
     const pct = Math.round(Math.max(0, Math.min(1, v)) * 100);
     return `<div class="meter ${cls}"><span class="ml">${label}</span>` +
@@ -176,8 +183,10 @@ function renderSelection() {
 
     if (cur.selection.length === type.nPick) {
         const odds = cur.engine.oddsFor(type.key, cur.selection);
-        const payout = Math.floor(cur.amount * odds);
-        preview.innerHTML = `予想オッズ <b>${odds}倍</b> ／ 当たれば <b>${payout}</b> コイン`;
+        const payout = cur.reviveMode ? 3000 : Math.floor(cur.amount * odds);
+        preview.innerHTML = cur.reviveMode
+            ? `復活成功で <b>${payout}</b> コイン`
+            : `予想オッズ <b>${odds}倍</b> ・ 当たれば <b>${payout}</b> コイン`;
         preview.classList.remove("hidden");
         confirm.classList.remove("hidden");
     } else {
@@ -185,12 +194,14 @@ function renderSelection() {
         confirm.classList.add("hidden");
     }
 }
-
-// 馬券を1枚購入してリストに追加。パネルは開いたまま（複数枚買える）。
 function placeTicket(sel) {
-    if (cur.amount <= 0 || cur.amount > remaining()) return;
+    if (!cur.reviveMode && (cur.amount <= 0 || cur.amount > remaining())) return;
     const odds = cur.engine.oddsFor(cur.type.key, sel);
-    cur.tickets.push({ typeKey: cur.type.key, sel, amount: cur.amount, odds });
+    cur.tickets.push({ typeKey: cur.type.key, sel, amount: cur.reviveMode ? 0 : cur.amount, odds, revive: cur.reviveMode });
+    if (cur.reviveMode) {
+        finishBetting();
+        return;
+    }
     cur.spent += cur.amount;
     cur.selection = [];
     cur.amount = Math.min(BET_STEP, remaining());
@@ -200,7 +211,6 @@ function placeTicket(sel) {
     renderBetslip();
     renderBalance();
 }
-
 function removeTicket(i) {
     cur.spent -= cur.tickets[i].amount;
     cur.tickets.splice(i, 1);

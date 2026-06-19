@@ -79,9 +79,19 @@
         <section id="screen-online-home" class="screen">
             <h1>🌐 オンライン対戦</h1>
             <div class="card">
+                <div class="profile-box">
+                    <div class="recent-label">プレイヤー名</div>
+                    <div class="name-reg-row">
+                        <input id="profile-name-input" type="text" maxlength="10" placeholder="名前を入力">
+                        <button id="profile-name-save" class="ghost">保存</button>
+                    </div>
+                    <div class="recent-label" id="profile-name-status"></div>
+                </div>
+                <div id="incoming-invites" class="friend-list hidden"></div>
                 <button id="online-create-open" class="primary">部屋を作る</button>
                 <button id="online-join-open" class="ghost">合言葉で参加する</button>
                 <div id="recent-rooms" class="recent-rooms hidden"></div>
+                <div id="friend-list" class="friend-list hidden"></div>
 
                 <div class="name-reg">
                     <div class="recent-label">🐴 馬の名前を登録（みんなのレースに出ます）</div>
@@ -141,6 +151,7 @@
             <p class="subtitle" id="lobby-note"></p>
             <div class="result-buttons">
                 <button id="lobby-invite" class="ghost">📨 招待リンクを送る</button>
+                <div id="lobby-friend-invites" class="friend-list hidden"></div>
                 <button id="lobby-start" class="primary hidden">ゲーム開始</button>
                 <button class="ghost" data-leave>退出する</button>
             </div>

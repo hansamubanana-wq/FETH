@@ -11,6 +11,8 @@ import { makeRng } from "./rng.js";
 import { mergeNames, pickNames, addName, setRemoteAdder, customCount } from "./names.js";
 
 const FB_VER = "10.12.2";
+const RESULT_WAIT_MS = 2 * 60 * 1000;
+const REVIVE_BALANCE = 3000;
 const configured = !!firebaseConfig.projectId;
 let fb = null;
 
@@ -37,8 +39,10 @@ const uid = (() => {
 
 // 名前・現在のルーム・最近の合言葉（フレンド/お気に入り）を保存する
 const LS = { name: "keiba_name", active: "keiba_active", recent: "keiba_recent" };
+LS.friends = "keiba_friends";
+const cleanPlayerName = (n) => (n || "").toString().trim().replace(/\s+/g, " ").slice(0, 10);
 const getName = () => localStorage.getItem(LS.name) || "";
-const saveName = (n) => localStorage.setItem(LS.name, n);
+const saveName = (n) => localStorage.setItem(LS.name, cleanPlayerName(n));
 const setActive = (c) => localStorage.setItem(LS.active, c);
 const getActive = () => localStorage.getItem(LS.active) || "";
 const clearActive = () => localStorage.removeItem(LS.active);
@@ -48,10 +52,26 @@ function addRecent(code) {
     r.unshift(code);
     localStorage.setItem(LS.recent, JSON.stringify(r.slice(0, 6)));
 }
+function getFriends() { try { return JSON.parse(localStorage.getItem(LS.friends) || "[]"); } catch { return []; } }
+function saveFriends(friends) { localStorage.setItem(LS.friends, JSON.stringify(friends.slice(0, 80))); }
+function rememberFriends(players) {
+    const now = Date.now();
+    const map = new Map(getFriends().map((f) => [f.id, f]));
+    Object.keys(players || {}).forEach((id) => {
+        if (id === uid) return;
+        const name = cleanPlayerName(players[id]?.name);
+        if (!name) return;
+        map.set(id, { id, name, lastPlayed: now });
+    });
+    saveFriends([...map.values()].sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0)));
+}
 
 const o = {
     code: null, isHost: false, room: null,
     engine: null, engineSeed: null, unsub: null,
+    inviteUnsub: null,
+    resultTimer: null,
+    countdownTimer: null,
     betShownRound: -1, playedRound: -1, finishedRound: -1, settledRound: -1, raceStartedRound: -1, resultShownRound: -1,
 };
 
@@ -69,6 +89,17 @@ export function initOnline() {
     document.getElementById("lobby-start").addEventListener("click", hostStartBetting);
     document.getElementById("lobby-invite").addEventListener("click", shareInvite);
     document.querySelectorAll("[data-leave]").forEach((b) => b.addEventListener("click", onLeaveClick));
+    document.getElementById("profile-name-save").addEventListener("click", saveProfileFromInput);
+    document.getElementById("online-create-open").addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (requireProfile()) openCreateScreen();
+    }, true);
+    document.getElementById("online-join-open").addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (requireProfile()) openJoinScreen();
+    }, true);
 
     // 馬名の登録（サーバー保存）
     setRemoteAdder(persistName);
@@ -87,12 +118,63 @@ export function initOnline() {
 export function enterOnlineHome() {
     if (!configured) { showScreen("screen-online-setup-needed"); return; }
     const n = getName();
+    const profile = document.getElementById("profile-name-input");
+    if (profile) profile.value = n;
     document.getElementById("create-name").value = n;
     document.getElementById("join-name").value = n;
+    syncProfile().catch(() => {});
     renderRecent();
+    renderFriends();
+    listenInvites();
+    updateProfileStatus();
     updateNameCount();
     preloadNames();
     showScreen("screen-online-home");
+}
+
+function updateProfileStatus() {
+    const status = document.getElementById("profile-name-status");
+    if (!status) return;
+    const name = getName();
+    status.textContent = name ? `${name} としてプレイ中` : "初回だけ名前を保存してください";
+}
+
+function saveProfileFromInput() {
+    const input = document.getElementById("profile-name-input");
+    const name = cleanPlayerName(input?.value);
+    if (!name) { alert("名前を入力してください"); input?.focus(); return false; }
+    saveName(name);
+    document.getElementById("create-name").value = name;
+    document.getElementById("join-name").value = name;
+    updateProfileStatus();
+    syncProfile().catch(() => {});
+    return true;
+}
+
+function requireProfile() {
+    if (getName()) return true;
+    showScreen("screen-online-home");
+    alert("最初にプレイヤー名を保存してください");
+    document.getElementById("profile-name-input")?.focus();
+    return false;
+}
+
+function openCreateScreen() {
+    document.getElementById("create-name").value = getName();
+    document.getElementById("create-name")?.closest(".field")?.classList.add("hidden");
+    showScreen("screen-create");
+}
+
+function openJoinScreen() {
+    document.getElementById("join-name").value = getName();
+    document.getElementById("join-name")?.closest(".field")?.classList.add("hidden");
+    showScreen("screen-join");
+}
+
+async function syncProfile() {
+    if (!configured || !getName()) return;
+    await ensureDb();
+    await fb.setDoc(fb.doc(fb.db, "users", uid), { name: getName(), updatedAt: Date.now() }, { merge: true });
 }
 
 function updateNameCount() {
@@ -140,17 +222,112 @@ function renderRecent() {
         chip.addEventListener("click", () => {
             document.getElementById("join-code").value = code;
             document.getElementById("join-name").value = getName();
-            showScreen("screen-join");
+            if (requireProfile()) openJoinScreen();
         });
         box.appendChild(chip);
     });
 }
 
+function renderFriends() {
+    renderFriendBox("friend-list", false);
+    renderFriendBox("lobby-friend-invites", true);
+}
+
+function renderFriendBox(id, canInvite) {
+    const box = document.getElementById(id);
+    if (!box) return;
+    const friends = getFriends();
+    box.innerHTML = "";
+    if (!friends.length) { box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    const label = document.createElement("div");
+    label.className = "recent-label";
+    label.textContent = canInvite ? "フレンドを招待" : "一緒に遊んだフレンド";
+    box.appendChild(label);
+    friends.forEach((friend) => {
+        const row = document.createElement("div");
+        row.className = "friend-row";
+        const name = document.createElement("span");
+        name.textContent = friend.name;
+        row.appendChild(name);
+        const btn = document.createElement("button");
+        btn.className = "ghost";
+        btn.textContent = canInvite ? "招待" : "部屋で招待できます";
+        btn.disabled = !canInvite;
+        if (canInvite) btn.addEventListener("click", () => inviteFriend(friend));
+        row.appendChild(btn);
+        box.appendChild(row);
+    });
+}
+
+async function inviteFriend(friend) {
+    if (!o.code) { alert("部屋に入ってから招待できます"); return; }
+    try {
+        await ensureDb();
+        const invite = {
+            inviteId: `${uid}_${o.code}_${Date.now()}`,
+            code: o.code,
+            fromId: uid,
+            fromName: getName(),
+            at: Date.now(),
+        };
+        await fb.setDoc(fb.doc(fb.db, "invites", friend.id), { items: fb.arrayUnion(invite) }, { merge: true });
+        alert(`${friend.name} さんに招待を送りました`);
+    } catch (e) {
+        alert("招待を送れませんでした");
+    }
+}
+
+async function listenInvites() {
+    if (!configured) return;
+    try {
+        await ensureDb();
+        if (o.inviteUnsub) o.inviteUnsub();
+        o.inviteUnsub = fb.onSnapshot(fb.doc(fb.db, "invites", uid), (snap) => {
+            renderIncomingInvites(snap.exists() ? (snap.data().items || []) : []);
+        });
+    } catch (e) {
+        renderIncomingInvites([]);
+    }
+}
+
+function renderIncomingInvites(items) {
+    const box = document.getElementById("incoming-invites");
+    if (!box) return;
+    const invites = (items || []).slice(-8).reverse();
+    box.innerHTML = "";
+    if (!invites.length) { box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    const label = document.createElement("div");
+    label.className = "recent-label";
+    label.textContent = "届いている招待";
+    box.appendChild(label);
+    invites.forEach((invite) => {
+        const row = document.createElement("div");
+        row.className = "invite-row";
+        const text = document.createElement("span");
+        text.textContent = `${invite.fromName || "フレンド"} から ${invite.code}`;
+        row.appendChild(text);
+        const btn = document.createElement("button");
+        btn.className = "ghost";
+        btn.textContent = "参加";
+        btn.addEventListener("click", () => {
+            if (!requireProfile()) return;
+            document.getElementById("join-code").value = invite.code || "";
+            document.getElementById("join-name").value = getName();
+            openJoinScreen();
+        });
+        row.appendChild(btn);
+        box.appendChild(row);
+    });
+}
+
 async function createRoom() {
     try { await ensureDb(); } catch (e) { alert("Firebaseに接続できませんでした"); return; }
-    const name = document.getElementById("create-name").value.trim() || "ホスト";
+    if (!requireProfile()) return;
+    const name = getName();
     const funds = clampFunds(parseInt(document.getElementById("create-funds").value, 10));
-    saveName(name);
+    await syncProfile().catch(() => {});
     o.code = randomCode();
     o.isHost = true;
     await fb.setDoc(roomDoc(), {
@@ -163,10 +340,11 @@ async function createRoom() {
 
 async function joinRoom() {
     try { await ensureDb(); } catch (e) { alert("Firebaseに接続できませんでした"); return; }
+    if (!requireProfile()) return;
     const code = document.getElementById("join-code").value.trim().toUpperCase();
-    const name = document.getElementById("join-name").value.trim() || "プレイヤー";
+    const name = getName();
     if (!code) { alert("合言葉を入力してください"); return; }
-    saveName(name);
+    await syncProfile().catch(() => {});
     o.code = code;
     const snap = await fb.getDoc(roomDoc());
     if (!snap.exists()) { alert("その合言葉の部屋が見つかりません"); o.code = null; return; }
@@ -223,7 +401,8 @@ export async function reconnectIfPossible() {
         // 招待リンク経由：名前を入れて参加してもらう
         document.getElementById("join-code").value = fromUrl;
         document.getElementById("join-name").value = getName();
-        showScreen("screen-join");
+        if (getName()) openJoinScreen();
+        else enterOnlineHome();
         return true;
     }
     const code = getActive();
@@ -257,6 +436,7 @@ function onRoom(room) {
     o.room = room;
     const players = room.players || {};
     if (!players[uid]) { doLeave(); return; }
+    rememberFriends(players);
 
     // ホストが抜けていたら、残っているうち最若番が引き継ぐ（進行が止まらないように）
     if (!players[room.host]) {
@@ -276,6 +456,7 @@ function onRoom(room) {
         case "race": handleRace(room); break;
         case "result": handleResult(room); break;
     }
+    if (room.phase !== "result") clearResultTimers();
 
     if (o.isHost && room.phase === "betting" && allBet(room)) hostStartRace(room);
     // ホスト交代などで精算が漏れないよう、ここでも試みる
@@ -293,6 +474,7 @@ function renderLobby(room) {
     showScreen("screen-lobby");
     document.getElementById("lobby-code").textContent = o.code;
     renderPlayerList("lobby-players", room, null);
+    renderFriends();
     const startBtn = document.getElementById("lobby-start");
     const note = document.getElementById("lobby-note");
     if (o.isHost) {
@@ -313,7 +495,8 @@ function renderPlayerList(elId, room, statusFn) {
         const li = document.createElement("li");
         const tag = id === room.host ? " 👑" : "";
         const me = id === uid ? "（あなた）" : "";
-        const status = statusFn ? statusFn(p) : `${p.balance} コイン`;
+        const bankrupt = p.bankrupt ? " / BANKRUPT" : "";
+        const status = statusFn ? statusFn(p) : `${p.balance} coins${bankrupt}`;
         li.innerHTML = `<span>${p.name}${tag}${me}</span><span class="coins">${status}</span>`;
         el.appendChild(li);
     });
@@ -322,10 +505,19 @@ function renderPlayerList(elId, room, statusFn) {
 // ---- ベット ----
 function hostStartBetting() {
     const round = (o.room.round || 0) + 1;
-    const updates = { phase: "betting", round, horseSeed: randomSeed(), raceSeed: 0, names: pickNames(NUM_HORSES) };
+    const updates = {
+        phase: "betting",
+        round,
+        horseSeed: randomSeed(),
+        raceSeed: 0,
+        names: pickNames(NUM_HORSES),
+        resultDeadlineAt: fb.deleteField(),
+    };
     Object.keys(o.room.players || {}).forEach((id) => {
         updates[`players.${id}.betDone`] = false;
         updates[`players.${id}.tickets`] = [];
+        updates[`players.${id}.readyNext`] = false;
+        updates[`players.${id}.reviveResult`] = fb.deleteField();
     });
     fb.updateDoc(roomDoc(), updates);
 }
@@ -333,26 +525,31 @@ function hostStartBetting() {
 function showWait(room, title) {
     showScreen("screen-wait");
     document.getElementById("wait-title").textContent = title;
-    renderPlayerList("wait-players", room, (p) => (p.betDone ? "✅ 賭けた" : "…考え中"));
+    renderPlayerList("wait-players", room, (p) => {
+        const base = p.betDone ? "OK" : "waiting";
+        return p.bankrupt ? `BANKRUPT / ${base}` : base;
+    });
 }
 
 function handleBetting(room) {
     const me = room.players[uid];
     if (me.betDone) {
-        // 途中参加で今回観戦の人にも分かるメッセージ
         const noTickets = !me.tickets || me.tickets.length === 0;
-        showWait(room, noTickets ? "次のレースから参加します（観戦中）" : "他のプレイヤーの賭けを待っています");
+        showWait(room, noTickets ? "Watching until next race" : "Waiting for other players");
         return;
     }
     if (o.betShownRound === room.round || !o.engine) return;
     o.betShownRound = room.round;
 
     document.getElementById("name-wrap").classList.add("hidden");
-    document.getElementById("pick-title").textContent = `${me.name} さんの賭け`;
+    document.getElementById("pick-title").textContent = me.bankrupt
+        ? `${me.name} revival challenge`
+        : `${me.name} betting`;
     showScreen("screen-pick");
     startBetPanel({
         engine: o.engine,
-        balance: me.balance,
+        balance: me.bankrupt ? 0 : me.balance,
+        reviveMode: !!me.bankrupt,
         onComplete: (tickets) => fb.updateDoc(roomDoc(), {
             [`players.${uid}.tickets`]: tickets || [],
             [`players.${uid}.betDone`]: true,
@@ -360,7 +557,7 @@ function handleBetting(room) {
     });
 }
 
-// ---- レース ----
+// ---- Race ----
 function hostStartRace(room) {
     if (o.raceStartedRound === room.round) return;
     o.raceStartedRound = room.round;
@@ -388,25 +585,33 @@ function trySettle() {
     const room = o.room;
     if (!room || room.phase !== "race") return;
     if (!o.isHost || !o.engine) return;
-    if (o.finishedRound !== room.round) return;      // 自分の演出がまだ終わっていない
+    if (o.finishedRound !== room.round) return;
     if (o.settledRound === room.round) return;
     o.settledRound = room.round;
 
     const orderIds = orderFromSeed(room).map((h) => h.id);
     const ps = room.players || {};
-    const updates = { phase: "result" };
-    let bankrupt = false;
+    const updates = { phase: "result", resultDeadlineAt: Date.now() + RESULT_WAIT_MS, gameOver: false };
     Object.keys(ps).forEach((id) => {
-        const res = settleTickets(ps[id].tickets, orderIds, o.engine.horses, o.engine.byKey);
-        const nb = ps[id].balance + res.delta;
-        updates[`players.${id}.balance`] = nb;
-        if (nb <= 0) bankrupt = true;
+        const player = ps[id];
+        const tickets = player.tickets || [];
+        if (player.bankrupt) {
+            const reviveHit = tickets.some((t) => t.revive && t.typeKey === "trifecta" && o.engine.byKey.trifecta.test(orderIds, t.sel || []));
+            updates[`players.${id}.balance`] = reviveHit ? REVIVE_BALANCE : 0;
+            updates[`players.${id}.bankrupt`] = !reviveHit;
+            updates[`players.${id}.reviveResult`] = reviveHit ? "hit" : (tickets.some((t) => t.revive) ? "miss" : "none");
+            updates[`players.${id}.readyNext`] = false;
+            return;
+        }
+        const res = settleTickets(tickets, orderIds, o.engine.horses, o.engine.byKey);
+        const nb = player.balance + res.delta;
+        updates[`players.${id}.balance`] = Math.max(0, nb);
+        updates[`players.${id}.bankrupt`] = nb <= 0;
+        updates[`players.${id}.reviveResult`] = fb.deleteField();
+        updates[`players.${id}.readyNext`] = false;
     });
-    updates.gameOver = bankrupt; // 破産者が出たらゲーム終了
     fb.updateDoc(roomDoc(), updates);
 }
-
-// 破産でゲーム終了 → ホストが全員の残高をリセットしてロビーへ戻す
 function hostReset() {
     const updates = { phase: "lobby", gameOver: false, raceSeed: 0 };
     Object.keys(o.room.players || {}).forEach((id) => {
@@ -419,52 +624,113 @@ function hostReset() {
 
 // ---- 結果 ----
 function handleResult(room) {
-    // このラウンドのレースを再生し終えた人は結果を表示。途中参加で未再生の人は待機。
+    scheduleResultAdvance(room);
     if (o.finishedRound === room.round && o.engine) maybeShowResult(room);
-    else showWait(room, "次のレースを待っています（観戦中）");
+    else showWait(room, "Waiting for next race");
 }
 
 function maybeShowResult(room) {
     if (!room || room.phase !== "result") return;
     if (o.finishedRound !== room.round) return;
-    if (o.resultShownRound === room.round) return;
     if (!o.engine) return;
-    o.resultShownRound = room.round;
 
     const ordered = orderFromSeed(room);
     const orderIds = ordered.map((h) => h.id);
     const ps = room.players || {};
 
     const payoutRows = Object.keys(ps).map((id) => {
-        const res = settleTickets(ps[id].tickets, orderIds, o.engine.horses, o.engine.byKey);
-        return { name: ps[id].name + (id === uid ? "（あなた）" : ""), detail: res.detail, delta: res.delta };
+        const player = ps[id];
+        let res;
+        if (player.reviveResult === "hit") {
+            res = { detail: "REVIVAL HIT: trifecta cleared, revived with 3000 coins", delta: REVIVE_BALANCE };
+        } else if (player.reviveResult === "miss") {
+            res = { detail: "REVIVAL MISS: bankrupt status continues", delta: 0 };
+        } else if (player.reviveResult === "none" && player.bankrupt) {
+            res = { detail: "BANKRUPT: no revival challenge", delta: 0 };
+        } else {
+            res = settleTickets(player.tickets || [], orderIds, o.engine.horses, o.engine.byKey);
+        }
+        const suffix = id === uid ? " (you)" : "";
+        const status = player.bankrupt ? " [BANKRUPT]" : "";
+        return { name: player.name + suffix + status, detail: res.detail, delta: res.delta };
     });
     const standings = Object.keys(ps)
-        .map((id) => ({ name: ps[id].name, balance: ps[id].balance }))
+        .map((id) => ({ name: ps[id].name, balance: ps[id].balance, bankrupt: !!ps[id].bankrupt, readyNext: !!ps[id].readyNext }))
         .sort((a, b) => b.balance - a.balance);
 
-    const gameOver = !!room.gameOver;
-    let primaryLabel = "", onPrimary = null, note = "";
-    if (gameOver) {
-        primaryLabel = o.isHost ? "リセットして再戦" : "";
-        onPrimary = o.isHost ? hostReset : null;
-        note = o.isHost ? "破産者が出たので、リセットして再戦できます。" : "ホストのリセットを待っています…";
-    } else {
-        primaryLabel = o.isHost ? "次のレースへ" : "";
-        onPrimary = o.isHost ? hostStartBetting : null;
-        note = o.isHost ? "" : "ホストが次のレースを始めるのを待っています…";
-    }
-
+    const me = ps[uid] || {};
+    const readyCount = Object.keys(ps).filter((id) => ps[id].readyNext).length;
+    const total = Object.keys(ps).length;
     renderResult(ordered, payoutRows, standings, {
-        primaryLabel, onPrimary,
+        primaryLabel: me.readyNext ? "OK済み" : "OK（次のレースへ）",
+        onPrimary: me.readyNext ? null : markReadyNext,
         secondaryLabel: "退出する",
         onSecondary: onLeaveClick,
-        note,
-        gameOver,
+        note: resultCountdownText(room, readyCount, total),
+        gameOver: false,
         bestBets: bestPerType(orderIds, o.engine),
     });
+    startResultCountdown(room);
 }
 
+function markReadyNext() {
+    if (!o.code) return;
+    fb.updateDoc(roomDoc(), { [`players.${uid}.readyNext`]: true }).catch(() => {});
+}
+
+function resultCountdownText(room, readyCount, total) {
+    const deadline = room.resultDeadlineAt || (Date.now() + RESULT_WAIT_MS);
+    const remain = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    const mm = String(Math.floor(remain / 60)).padStart(2, "0");
+    const ss = String(remain % 60).padStart(2, "0");
+    return `Next race in ${mm}:${ss} / OK ${readyCount}/${total}`;
+}
+
+function startResultCountdown(room) {
+    if (o.countdownTimer) clearInterval(o.countdownTimer);
+    o.countdownTimer = setInterval(() => {
+        if (!o.room || o.room.phase !== "result" || o.room.round !== room.round) {
+            clearInterval(o.countdownTimer);
+            o.countdownTimer = null;
+            return;
+        }
+        const note = document.getElementById("result-note");
+        if (note) {
+            const ps = o.room.players || {};
+            const readyCount = Object.keys(ps).filter((id) => ps[id].readyNext).length;
+            note.textContent = resultCountdownText(o.room, readyCount, Object.keys(ps).length);
+        }
+    }, 1000);
+}
+
+function clearResultTimers() {
+    if (o.countdownTimer) {
+        clearInterval(o.countdownTimer);
+        o.countdownTimer = null;
+    }
+    if (o.resultTimer) {
+        clearTimeout(o.resultTimer);
+        o.resultTimer = null;
+    }
+}
+
+function scheduleResultAdvance(room) {
+    if (!o.isHost || !room || room.phase !== "result") return;
+    const ps = room.players || {};
+    const ids = Object.keys(ps);
+    const allReady = ids.length > 0 && ids.every((id) => ps[id].readyNext);
+    const deadline = room.resultDeadlineAt || 0;
+    if (allReady || (deadline && Date.now() >= deadline)) {
+        hostStartBetting();
+        return;
+    }
+    if (o.resultTimer) clearTimeout(o.resultTimer);
+    if (deadline) {
+        o.resultTimer = setTimeout(() => {
+            if (o.room && o.room.phase === "result" && o.room.round === room.round) hostStartBetting();
+        }, Math.max(0, deadline - Date.now() + 250));
+    }
+}
 function orderFromSeed(room) {
     const data = simulateRaceData(o.engine.horses, makeRng(room.raceSeed));
     return data.order.map((i) => o.engine.horses[i]);

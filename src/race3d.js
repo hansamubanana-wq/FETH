@@ -20,6 +20,7 @@ export class Race3DRenderer {
         this.mixers = [];
         this.horseGroups = [];
         this.numberPlates = [];
+        this.boostLabels = [];
         this.boostRings = [];
 
         this.scene = new THREE.Scene();
@@ -93,9 +94,16 @@ export class Race3DRenderer {
             const ring = this.boostRings[i];
             ring.visible = boosting || i === leader;
             ring.material.color.set(boosting ? 0xff8a00 : 0xffd34d);
-            ring.material.opacity = boosting ? 0.72 : 0.38;
-            ring.scale.setScalar(boosting ? 1 + Math.sin(elapsed * 24) * 0.12 : 1);
+            ring.material.opacity = boosting ? 0.9 : 0.38;
+            ring.scale.setScalar(boosting ? 1.55 + Math.sin(elapsed * 24) * 0.18 : 1);
             ring.position.copy(pose.position).add(new THREE.Vector3(0, 0.08, 0));
+
+            const boostLabel = this.boostLabels[i];
+            if (boostLabel) {
+                boostLabel.visible = Boolean(boosting);
+                boostLabel.position.copy(pose.position).add(new THREE.Vector3(0, 6.2 + Math.sin(elapsed * 12) * 0.25, 0));
+                boostLabel.quaternion.copy(this.camera.quaternion);
+            }
         });
 
         this.renderer.render(this.scene, this.camera);
@@ -167,7 +175,7 @@ export class Race3DRenderer {
             (texture) => {
                 texture.wrapS = THREE.RepeatWrapping;
                 texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(7, 5);
+                texture.repeat.set(4, 3);
                 texture.colorSpace = THREE.SRGBColorSpace;
                 texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
                 material.map = texture;
@@ -205,7 +213,7 @@ export class Race3DRenderer {
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(7, 5);
+        texture.repeat.set(4, 3);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
         return texture;
@@ -335,8 +343,22 @@ export class Race3DRenderer {
             this.numberPlates.push(numberPlate);
             this.root.add(numberPlate);
 
+            const boostLabel = new THREE.Mesh(
+                new THREE.PlaneGeometry(4.4, 1.45),
+                new THREE.MeshBasicMaterial({
+                    map: this._makeBoostTexture(),
+                    transparent: true,
+                    side: THREE.DoubleSide,
+                    depthTest: false,
+                })
+            );
+            boostLabel.visible = false;
+            boostLabel.renderOrder = 12;
+            this.boostLabels.push(boostLabel);
+            this.root.add(boostLabel);
+
             const ring = new THREE.Mesh(
-                new THREE.RingGeometry(1.35, 1.6, 64),
+                new THREE.RingGeometry(1.55, 2.1, 64),
                 new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
             );
             ring.rotation.x = -Math.PI / 2;
@@ -402,6 +424,34 @@ export class Race3DRenderer {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(String(number), 128, 86);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 4;
+        return texture;
+    }
+
+    _makeBoostTexture() {
+        const canvas = document.createElement("canvas");
+        canvas.width = 512;
+        canvas.height = 168;
+        const ctx = canvas.getContext("2d");
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, "rgba(255, 112, 24, 0.96)");
+        gradient.addColorStop(1, "rgba(255, 214, 64, 0.96)");
+        ctx.fillStyle = gradient;
+        ctx.strokeStyle = "rgba(64, 24, 0, 0.88)";
+        ctx.lineWidth = 12;
+        ctx.roundRect(18, 22, 476, 112, 34);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "rgba(64, 24, 0, 0.9)";
+        ctx.lineWidth = 8;
+        ctx.font = "900 76px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.strokeText("BOOST!", 256, 82);
+        ctx.fillText("BOOST!", 256, 82);
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = 4;
