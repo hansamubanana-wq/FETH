@@ -25,7 +25,7 @@ export class Race3DRenderer {
         this.scene.fog = new THREE.Fog(0x8cc3e3, 90, 230);
 
         this.camera = new THREE.OrthographicCamera(-62, 62, 35, -35, 0.1, 300);
-        this.camera.position.set(0, 95, 55);
+        this.camera.position.set(0, 52, 72);
         this.camera.up.set(0, 0, -1);
         this.camera.lookAt(0, 0, 0);
 
@@ -52,7 +52,7 @@ export class Race3DRenderer {
         const width = Math.max(320, Math.floor(rect.width || this.canvas.clientWidth || 960));
         const height = Math.max(240, Math.floor(width * 0.5625));
         this.renderer.setSize(width, height, false);
-        const frustumHeight = 92;
+        const frustumHeight = 98;
         const frustumWidth = frustumHeight * (width / height);
         this.camera.left = -frustumWidth / 2;
         this.camera.right = frustumWidth / 2;
