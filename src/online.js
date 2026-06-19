@@ -543,8 +543,8 @@ function handleBetting(room) {
 
     document.getElementById("name-wrap").classList.add("hidden");
     document.getElementById("pick-title").textContent = me.bankrupt
-        ? `${me.name} revival challenge`
-        : `${me.name} betting`;
+        ? `${me.name} さんの復活チャレンジ`
+        : `${me.name} さんの賭け`;
     showScreen("screen-pick");
     startBetPanel({
         engine: o.engine,
@@ -596,7 +596,7 @@ function trySettle() {
         const player = ps[id];
         const tickets = player.tickets || [];
         if (player.bankrupt) {
-            const reviveHit = tickets.some((t) => t.revive && t.typeKey === "trifecta" && o.engine.byKey.trifecta.test(orderIds, t.sel || []));
+            const reviveHit = tickets.some((t) => t.revive && t.typeKey === "win" && o.engine.byKey.win.test(orderIds, t.sel || []));
             updates[`players.${id}.balance`] = reviveHit ? REVIVE_BALANCE : 0;
             updates[`players.${id}.bankrupt`] = !reviveHit;
             updates[`players.${id}.reviveResult`] = reviveHit ? "hit" : (tickets.some((t) => t.revive) ? "miss" : "none");
@@ -642,11 +642,11 @@ function maybeShowResult(room) {
         const player = ps[id];
         let res;
         if (player.reviveResult === "hit") {
-            res = { detail: "REVIVAL HIT: trifecta cleared, revived with 3000 coins", delta: REVIVE_BALANCE };
+            res = { detail: "復活成功：単勝的中で3000コイン獲得", delta: REVIVE_BALANCE };
         } else if (player.reviveResult === "miss") {
-            res = { detail: "REVIVAL MISS: bankrupt status continues", delta: 0 };
+            res = { detail: "復活失敗：破産状態が続きます", delta: 0 };
         } else if (player.reviveResult === "none" && player.bankrupt) {
-            res = { detail: "BANKRUPT: no revival challenge", delta: 0 };
+            res = { detail: "破産：復活チャレンジ未挑戦", delta: 0 };
         } else {
             res = settleTickets(player.tickets || [], orderIds, o.engine.horses, o.engine.byKey);
         }

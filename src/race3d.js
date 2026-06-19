@@ -79,30 +79,34 @@ export class Race3DRenderer {
             group.rotation.y = pose.yaw + Math.PI * 1.5;
             group.visible = true;
 
-            const plate = this.numberPlates[i];
-            if (plate) {
-                plate.position.copy(pose.position).add(new THREE.Vector3(0, 4.1, 0));
-                plate.quaternion.copy(this.camera.quaternion);
-                plate.visible = true;
-            }
-
             const t = distances[i] / TRACK_LEN;
             const boosting = distances[i] < TRACK_LEN - 0.5 &&
                 this.data.abLabel[i] &&
                 t >= this.data.abFrom[i] &&
                 t <= this.data.abTo[i];
+
+            const plate = this.numberPlates[i];
+            if (plate) {
+                plate.position.copy(pose.position).add(new THREE.Vector3(0, 6.6, 0));
+                plate.quaternion.copy(this.camera.quaternion);
+                // ブースト中はゼッケンも少し拡大して目立たせる
+                plate.scale.setScalar(boosting ? 1.25 + Math.sin(elapsed * 22) * 0.1 : 1);
+                plate.visible = true;
+            }
+
             const ring = this.boostRings[i];
             ring.visible = boosting || i === leader;
             ring.material.color.set(boosting ? 0xff8a00 : 0xffd34d);
-            ring.material.opacity = boosting ? 0.9 : 0.38;
-            ring.scale.setScalar(boosting ? 1.55 + Math.sin(elapsed * 24) * 0.18 : 1);
+            ring.material.opacity = boosting ? 0.95 : 0.36;
+            ring.scale.setScalar(boosting ? 1.6 + Math.sin(elapsed * 24) * 0.22 : 1);
             ring.position.copy(pose.position).add(new THREE.Vector3(0, 0.08, 0));
 
             const boostLabel = this.boostLabels[i];
             if (boostLabel) {
                 boostLabel.visible = Boolean(boosting);
-                boostLabel.position.copy(pose.position).add(new THREE.Vector3(0, 6.2 + Math.sin(elapsed * 12) * 0.25, 0));
+                boostLabel.position.copy(pose.position).add(new THREE.Vector3(0, 10.5 + Math.sin(elapsed * 12) * 0.4, 0));
                 boostLabel.quaternion.copy(this.camera.quaternion);
+                boostLabel.scale.setScalar(1.1 + Math.sin(elapsed * 18) * 0.12); // 鼓動するように拡縮
             }
         });
 
@@ -330,7 +334,7 @@ export class Race3DRenderer {
             group.add(saddle);
 
             const numberPlate = new THREE.Mesh(
-                new THREE.PlaneGeometry(3.35, 2.12),
+                new THREE.PlaneGeometry(7.2, 4.6),
                 new THREE.MeshBasicMaterial({
                     map: this._makeNumberTexture(horse.id + 1, horse.color),
                     transparent: true,
@@ -344,7 +348,7 @@ export class Race3DRenderer {
             this.root.add(numberPlate);
 
             const boostLabel = new THREE.Mesh(
-                new THREE.PlaneGeometry(6.2, 1.9),
+                new THREE.PlaneGeometry(15, 4.6),
                 new THREE.MeshBasicMaterial({
                     map: this._makeAbilityTexture(this.data.abLabel[i] || "SPECIAL"),
                     transparent: true,
@@ -358,7 +362,7 @@ export class Race3DRenderer {
             this.root.add(boostLabel);
 
             const ring = new THREE.Mesh(
-                new THREE.RingGeometry(1.55, 2.1, 64),
+                new THREE.RingGeometry(2.7, 3.9, 64),
                 new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
             );
             ring.rotation.x = -Math.PI / 2;
@@ -447,11 +451,11 @@ export class Race3DRenderer {
         ctx.fillStyle = "#ffffff";
         ctx.strokeStyle = "rgba(64, 24, 0, 0.9)";
         ctx.lineWidth = 9;
-        ctx.font = "900 84px system-ui, sans-serif";
+        ctx.font = "900 92px system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.strokeText(`SPECIAL: ${label}`, 384, 102);
-        ctx.fillText(`SPECIAL: ${label}`, 384, 102);
+        ctx.strokeText(`⚡${label} 発動！`, 384, 104);
+        ctx.fillText(`⚡${label} 発動！`, 384, 104);
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = 4;

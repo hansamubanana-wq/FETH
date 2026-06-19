@@ -55,7 +55,7 @@ export function startBetPanel({ engine, balance, onComplete, reviveMode = false 
     cur.onComplete = onComplete;
     cur.reviveMode = reviveMode;
     cur.type = reviveMode
-        ? engine.betTypes.find((t) => t.key === "trifecta") || engine.betTypes[0]
+        ? engine.betTypes.find((t) => t.key === "win") || engine.betTypes[0]
         : engine.betTypes[0];
     cur.selection = [];
     cur.tickets = [];
@@ -83,7 +83,7 @@ function renderBalance() {
 function renderTabs() {
     const tabs = document.getElementById("bettype-tabs");
     tabs.innerHTML = "";
-    const types = cur.reviveMode ? cur.engine.betTypes.filter((t) => t.key === "trifecta") : cur.engine.betTypes;
+    const types = cur.reviveMode ? cur.engine.betTypes.filter((t) => t.key === "win") : cur.engine.betTypes;
     for (const t of types) {
         const btn = document.createElement("button");
         btn.textContent = t.label;
@@ -95,10 +95,10 @@ function renderTabs() {
         tabs.appendChild(btn);
     }
     document.getElementById("bettype-desc").textContent = cur.reviveMode
-        ? "破産中の特別ルール：三連単を的中できれば3000コインで復活できます。外れても追加の支払いはありません。"
+        ? "破産中の特別ルール：単勝を的中できれば3000コインで復活できます。外れても追加の支払いはありません。"
         : cur.type.desc;
     document.getElementById("pick-instruction").textContent = cur.reviveMode
-        ? "復活をかけて1着→2着→3着を選んでください"
+        ? "復活をかけて1着になる馬を選んでください"
         : "↓ " + cur.type.instruction;
 }
 function meter(label, v, valText = "", cls = "") {
