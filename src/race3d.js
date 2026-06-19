@@ -55,7 +55,7 @@ export class Race3DRenderer {
         const width = Math.max(320, Math.floor(rect.width || this.canvas.clientWidth || 960));
         const height = Math.max(240, Math.floor(width * 0.5625));
         this.renderer.setSize(width, height, false);
-        const frustumHeight = 98;
+        const frustumHeight = 64; // 外レーンの馬がギリギリ収まるまでズーム
         const frustumWidth = frustumHeight * (width / height);
         this.camera.left = -frustumWidth / 2;
         this.camera.right = frustumWidth / 2;
@@ -87,10 +87,10 @@ export class Race3DRenderer {
 
             const plate = this.numberPlates[i];
             if (plate) {
-                plate.position.copy(pose.position).add(new THREE.Vector3(0, 6.6, 0));
+                // 馬の真上に高めに浮かせて、馬体と被らないようにする
+                plate.position.copy(pose.position).add(new THREE.Vector3(0, 8.4, 0));
                 plate.quaternion.copy(this.camera.quaternion);
-                // ブースト中はゼッケンも少し拡大して目立たせる
-                plate.scale.setScalar(boosting ? 1.25 + Math.sin(elapsed * 22) * 0.1 : 1);
+                plate.scale.setScalar(boosting ? 1.2 + Math.sin(elapsed * 22) * 0.08 : 1);
                 plate.visible = true;
             }
 
@@ -104,7 +104,7 @@ export class Race3DRenderer {
             const boostLabel = this.boostLabels[i];
             if (boostLabel) {
                 boostLabel.visible = Boolean(boosting);
-                boostLabel.position.copy(pose.position).add(new THREE.Vector3(0, 10.5 + Math.sin(elapsed * 12) * 0.4, 0));
+                boostLabel.position.copy(pose.position).add(new THREE.Vector3(0, 12.2 + Math.sin(elapsed * 12) * 0.4, 0));
                 boostLabel.quaternion.copy(this.camera.quaternion);
                 boostLabel.scale.setScalar(1.1 + Math.sin(elapsed * 18) * 0.12); // 鼓動するように拡縮
             }
@@ -334,7 +334,7 @@ export class Race3DRenderer {
             group.add(saddle);
 
             const numberPlate = new THREE.Mesh(
-                new THREE.PlaneGeometry(7.2, 4.6),
+                new THREE.PlaneGeometry(4.7, 3.0),
                 new THREE.MeshBasicMaterial({
                     map: this._makeNumberTexture(horse.id + 1, horse.color),
                     transparent: true,
@@ -348,7 +348,7 @@ export class Race3DRenderer {
             this.root.add(numberPlate);
 
             const boostLabel = new THREE.Mesh(
-                new THREE.PlaneGeometry(15, 4.6),
+                new THREE.PlaneGeometry(9, 2.8),
                 new THREE.MeshBasicMaterial({
                     map: this._makeAbilityTexture(this.data.abLabel[i] || "SPECIAL"),
                     transparent: true,
@@ -362,7 +362,7 @@ export class Race3DRenderer {
             this.root.add(boostLabel);
 
             const ring = new THREE.Mesh(
-                new THREE.RingGeometry(2.7, 3.9, 64),
+                new THREE.RingGeometry(1.9, 2.7, 64),
                 new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
             );
             ring.rotation.x = -Math.PI / 2;
