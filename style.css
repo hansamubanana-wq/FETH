@@ -449,8 +449,20 @@ button.ghost {
     margin-top: 4px;
 }
 
+.horse-pick .cond {
+    margin-top: 6px;
+    font-weight: 800;
+    font-size: 0.85rem;
+}
+
+.horse-pick .cond-lv5 { color: #ff5252; }
+.horse-pick .cond-lv4 { color: #66d97a; }
+.horse-pick .cond-lv3 { color: var(--muted); }
+.horse-pick .cond-lv2 { color: #7aa6d6; }
+.horse-pick .cond-lv1 { color: #9aa3ad; }
+
 .horse-pick .meters {
-    margin: 8px 0 6px;
+    margin: 6px 0;
     text-align: left;
 }
 

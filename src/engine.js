@@ -25,10 +25,11 @@ export function buildRace(horseSeed, names = null) {
     const betTypes = buildBetTypes(PLACE_N).filter((t) => NUM_HORSES >= t.nPick);
     const byKey = Object.fromEntries(betTypes.map((t) => [t.key, t]));
 
-    // オッズ算出用シミュレーション（horseSeed から決定論的に）
+    // オッズ算出用シミュレーション（horseSeed から決定論的に）。
+    // 調子はオッズに織り込まない（ignoreCondition=true）＝調子を読める人が有利になる。
     const rng = makeRng((horseSeed ^ 0x9e3779b9) >>> 0);
     const sims = [];
-    for (let i = 0; i < SIM_RUNS; i++) sims.push(simulateOrder(horses, rng));
+    for (let i = 0; i < SIM_RUNS; i++) sims.push(simulateOrder(horses, rng, true));
 
     // 単勝確率（スムージングして 0 を避ける）
     const n = NUM_HORSES;
