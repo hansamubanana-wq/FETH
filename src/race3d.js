@@ -18,11 +18,11 @@ export class Race3DRenderer {
         this.boostRings = [];
 
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87b9df);
-        this.scene.fog = new THREE.Fog(0x87b9df, 80, 210);
+        this.scene.background = new THREE.Color(0x8cc3e3);
+        this.scene.fog = new THREE.Fog(0x8cc3e3, 90, 230);
 
         this.camera = new THREE.OrthographicCamera(-62, 62, 35, -35, 0.1, 300);
-        this.camera.position.set(0, 150, 0);
+        this.camera.position.set(0, 145, 18);
         this.camera.up.set(0, 0, -1);
         this.camera.lookAt(0, 0, 0);
 
@@ -70,7 +70,7 @@ export class Race3DRenderer {
         this.horseGroups.forEach((group, i) => {
             const pose = this._pose(distances[i], this.layout.off[i]);
             group.position.copy(pose.position);
-            group.rotation.y = pose.yaw + Math.PI / 2;
+            group.rotation.y = pose.yaw + Math.PI * 1.5;
             group.visible = true;
 
             const t = distances[i] / TRACK_LEN;
@@ -109,7 +109,7 @@ export class Race3DRenderer {
 
         const turf = new THREE.Mesh(
             new THREE.PlaneGeometry(220, 150, 1, 1),
-            new THREE.MeshStandardMaterial({ color: 0x257b38, roughness: 0.92 })
+            new THREE.MeshStandardMaterial({ color: 0x1f7f35, roughness: 0.92 })
         );
         turf.rotation.x = -Math.PI / 2;
         turf.receiveShadow = true;
