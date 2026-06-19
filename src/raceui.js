@@ -4,7 +4,6 @@ import { makeRng } from "./rng.js";
 import { settleTickets } from "./engine.js";
 import { showScreen } from "./ui.js";
 
-const PHOTO_GAP = 0.16; // この着差(s)未満なら写真判定演出
 const LIVE_INTERVAL = 130; // ライブ表示の更新間隔(ms)
 
 let liveCtx = null;     // { engine, players:[{name,tickets}], bettorMap }
@@ -19,8 +18,6 @@ export function playRace(horses, raceSeed, context = null) {
     showScreen("screen-race");
 
     const canvas = document.getElementById("track");
-    document.getElementById("photo-overlay").classList.add("hidden");
-    document.getElementById("flash").classList.remove("fire");
     const status = document.getElementById("race-status");
 
     setupLive(context);
@@ -43,11 +40,8 @@ export function playRace(horses, raceSeed, context = null) {
             race.onFinish = (ordered) => {
                 race.onTick = null;
                 updateLive(ordered, true);
-                if (raceData.gap < PHOTO_GAP) photoFinish(ordered, resolve);
-                else {
                     status.textContent = `ゴール！ 1着 ${ordered[0].name}`;
                     setTimeout(() => resolve(ordered), 1300);
-                }
             };
             race.start();
         }, 700);
@@ -114,29 +108,6 @@ function updateLive(ordered, force = false) {
     });
 }
 
-function photoFinish(ordered, resolve) {
-    const status = document.getElementById("race-status");
-    const flash = document.getElementById("flash");
-    const overlay = document.getElementById("photo-overlay");
-
-    flash.classList.remove("fire");
-    void flash.offsetWidth;
-    flash.classList.add("fire");
-    status.textContent = "📷 写真判定…";
-    overlay.classList.remove("hidden");
-
-    setTimeout(() => {
-        overlay.classList.add("hidden");
-        status.textContent = `📷 判定の結果… 1着 ${ordered[0].name}！（${ordered[1].name} を差し切り）`;
-        setTimeout(() => resolve(ordered), 1600);
-    }, 2400);
-}
-
-// 結果画面を表示する。
-//  orderedHorses: ゴール順の馬
-//  payoutRows: [{ name, detail, delta }]
-//  standings:   [{ name, balance }]（並び替え済み）
-//  buttons: { primaryLabel, onPrimary, secondaryLabel, onSecondary, note }
 export function renderResult(orderedHorses, payoutRows, standings, buttons) {
     showScreen("screen-result");
     const medals = ["🥇", "🥈", "🥉"];

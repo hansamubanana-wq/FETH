@@ -80,7 +80,7 @@ export class Race3DRenderer {
 
             const plate = this.numberPlates[i];
             if (plate) {
-                plate.position.copy(pose.position).add(new THREE.Vector3(0, 3.25, 0));
+                plate.position.copy(pose.position).add(new THREE.Vector3(0, 4.1, 0));
                 plate.quaternion.copy(this.camera.quaternion);
                 plate.visible = true;
             }
@@ -167,7 +167,7 @@ export class Race3DRenderer {
             (texture) => {
                 texture.wrapS = THREE.RepeatWrapping;
                 texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(18, 12);
+                texture.repeat.set(7, 5);
                 texture.colorSpace = THREE.SRGBColorSpace;
                 texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
                 material.map = texture;
@@ -205,7 +205,7 @@ export class Race3DRenderer {
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(18, 12);
+        texture.repeat.set(7, 5);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
         return texture;
@@ -322,7 +322,7 @@ export class Race3DRenderer {
             group.add(saddle);
 
             const numberPlate = new THREE.Mesh(
-                new THREE.PlaneGeometry(2.25, 1.42),
+                new THREE.PlaneGeometry(3.35, 2.12),
                 new THREE.MeshBasicMaterial({
                     map: this._makeNumberTexture(horse.id + 1, horse.color),
                     transparent: true,
