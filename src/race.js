@@ -1,4 +1,6 @@
 // レースの基礎パラメータ。事前計算シミュレーションと再生で共有する。
+import { Race3DRenderer } from "./race3d.js";
+
 const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
 const SPEED_NOISE = 100;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
 const TRACK_LEN = 820;    // 1周の距離（内部単位）
@@ -90,7 +92,6 @@ export function simulateRaceData(horses, rng) {
 export class Race {
     constructor(canvas, horses, raceData) {
         this.canvas = canvas;
-        this.ctx = canvas.getContext("2d");
         this.horses = horses;
         this.data = raceData;
         this.W = canvas.width;
@@ -121,6 +122,17 @@ export class Race {
         this.winnerTime = raceData.finishTime[raceData.order[0]];
         // 最後の馬がゴールするまでのシミュ時間（全員完走の判定用）
         this.lastTime = raceData.finishTime[raceData.order[raceData.order.length - 1]];
+        this.renderer3d = null;
+        try {
+            this.renderer3d = new Race3DRenderer(canvas, horses, raceData, {
+                rx: this.rx,
+                ry: this.ry,
+                off: this.off,
+            });
+        } catch (error) {
+            console.warn("3D renderer unavailable, falling back to 2D canvas.", error);
+        }
+        if (!this.renderer3d) this.ctx = canvas.getContext("2d");
     }
 
     start() {
@@ -130,6 +142,7 @@ export class Race {
 
     stop() {
         if (this._raf) cancelAnimationFrame(this._raf);
+        if (this.renderer3d) this.renderer3d.dispose();
     }
 
     _loop(now) {
@@ -202,6 +215,10 @@ export class Race {
     }
 
     _draw(elapsed = 0) {
+        if (this.renderer3d) {
+            this.renderer3d.render(this._dist, elapsed);
+            return;
+        }
         const ctx = this.ctx;
         const leadIdx = this._dist.map((d, i) => i).sort((a, b) => this._dist[b] - this._dist[a])[0];
 

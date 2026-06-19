@@ -6,7 +6,23 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>みんなで競馬ゲーム</title>
+    <meta name="description" content="3Dレース場と外部GLB馬モデルで遊べる競馬ベットゲーム">
+    <meta property="og:title" content="みんなで競馬">
+    <meta property="og:description" content="3Dレース場と外部GLB馬モデルで走る競馬ゲーム">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="assets/ogp.svg">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/app-icon.svg">
     <link rel="stylesheet" href="style.css">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 
 <body>
@@ -184,7 +200,7 @@
             <button class="exit-btn" data-exit>× 退出</button>
             <div id="race-status">よーい…</div>
             <div class="race-stage">
-                <canvas id="track" width="960" height="540"></canvas>
+                <canvas id="track" width="960" height="540" aria-label="3D競馬レース場" role="img"></canvas>
                 <div id="flash" class="flash"></div>
                 <div id="photo-overlay" class="photo-overlay hidden">
                     <div class="photo-line"></div>

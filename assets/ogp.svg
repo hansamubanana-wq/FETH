@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#254b78"/>
+      <stop offset="0.62" stop-color="#14233a"/>
+      <stop offset="1" stop-color="#0f1a2b"/>
+    </linearGradient>
+    <linearGradient id="dirt" x1="0" x2="1">
+      <stop offset="0" stop-color="#d7a466"/>
+      <stop offset="1" stop-color="#a16b37"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#sky)"/>
+  <circle cx="1000" cy="95" r="60" fill="#ffcc33" opacity=".9"/>
+  <path d="M0 430c210-84 393-80 570 4 231 109 436 88 630-37v233H0z" fill="#2e7d32"/>
+  <ellipse cx="610" cy="430" rx="455" ry="132" fill="none" stroke="url(#dirt)" stroke-width="74"/>
+  <ellipse cx="610" cy="430" rx="316" ry="64" fill="#2b803a"/>
+  <path d="M248 369c116-109 264-146 429-76 72 31 126 79 161 143-130 54-276 63-438 25-78-18-129-49-152-92z" fill="#7b4b2b"/>
+  <path d="M661 292l122-54-38 113z" fill="#7b4b2b"/>
+  <path d="M352 458l-45 117M498 468l-17 105M643 458l59 112" stroke="#f2eee4" stroke-width="34" stroke-linecap="round"/>
+  <path d="M196 328c139 5 255-31 347-108" fill="none" stroke="#ffcc33" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="705" cy="323" r="13" fill="#101820"/>
+  <rect x="436" y="296" width="108" height="58" rx="12" fill="#e73d4f"/>
+  <text x="82" y="132" fill="#fff" font-family="Meiryo, system-ui, sans-serif" font-size="58" font-weight="800">みんなで競馬</text>
+  <text x="84" y="193" fill="#cfe3ff" font-family="Meiryo, system-ui, sans-serif" font-size="30" font-weight="600">3Dレース場と外部GLB馬モデルで走る競馬ゲーム</text>
+</svg>
