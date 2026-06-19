@@ -21,8 +21,9 @@ export class Race3DRenderer {
         this.scene.background = new THREE.Color(0x87b9df);
         this.scene.fog = new THREE.Fog(0x87b9df, 80, 210);
 
-        this.camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 400);
-        this.camera.position.set(0, 62, 112);
+        this.camera = new THREE.OrthographicCamera(-62, 62, 35, -35, 0.1, 300);
+        this.camera.position.set(0, 150, 0);
+        this.camera.up.set(0, 0, -1);
         this.camera.lookAt(0, 0, 0);
 
         this.renderer = new THREE.WebGLRenderer({
@@ -48,7 +49,12 @@ export class Race3DRenderer {
         const width = Math.max(320, Math.floor(rect.width || this.canvas.clientWidth || 960));
         const height = Math.max(240, Math.floor(width * 0.5625));
         this.renderer.setSize(width, height, false);
-        this.camera.aspect = width / height;
+        const frustumHeight = 76;
+        const frustumWidth = frustumHeight * (width / height);
+        this.camera.left = -frustumWidth / 2;
+        this.camera.right = frustumWidth / 2;
+        this.camera.top = frustumHeight / 2;
+        this.camera.bottom = -frustumHeight / 2;
         this.camera.updateProjectionMatrix();
     }
 
@@ -64,7 +70,7 @@ export class Race3DRenderer {
         this.horseGroups.forEach((group, i) => {
             const pose = this._pose(distances[i], this.layout.off[i]);
             group.position.copy(pose.position);
-            group.rotation.y = pose.yaw;
+            group.rotation.y = pose.yaw + Math.PI / 2;
             group.visible = true;
 
             const t = distances[i] / TRACK_LEN;
@@ -80,7 +86,6 @@ export class Race3DRenderer {
             ring.position.copy(pose.position).add(new THREE.Vector3(0, 0.08, 0));
         });
 
-        this._animateCamera(distances, elapsed);
         this.renderer.render(this.scene, this.camera);
     }
 
@@ -196,6 +201,20 @@ export class Race3DRenderer {
         bar.position.set(x, 8.8, z + 24);
         bar.castShadow = true;
         this.root.add(bar);
+
+        const finishZ = this.layout.ry * 0.13;
+        const tileCount = 14;
+        const tileHeight = 1.55;
+        for (let i = 0; i < tileCount; i++) {
+            const tile = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.2, tileHeight),
+                new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0xffffff : 0x111111, side: THREE.DoubleSide })
+            );
+            tile.rotation.x = -Math.PI / 2;
+            tile.position.set(0, 0.18, finishZ + (i - tileCount / 2 + 0.5) * tileHeight);
+            tile.renderOrder = 5;
+            this.root.add(tile);
+        }
     }
 
     async _loadHorseModel() {
@@ -235,6 +254,20 @@ export class Race3DRenderer {
             saddle.castShadow = true;
             group.add(saddle);
 
+            const numberPlate = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.25, 1.42),
+                new THREE.MeshBasicMaterial({
+                    map: this._makeNumberTexture(horse.id + 1, horse.color),
+                    transparent: true,
+                    side: THREE.DoubleSide,
+                    depthTest: false,
+                })
+            );
+            numberPlate.rotation.x = -Math.PI / 2;
+            numberPlate.position.set(0, 2.45, 0);
+            numberPlate.renderOrder = 10;
+            group.add(numberPlate);
+
             const ring = new THREE.Mesh(
                 new THREE.RingGeometry(1.35, 1.6, 64),
                 new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
@@ -273,15 +306,6 @@ export class Race3DRenderer {
         return group;
     }
 
-    _animateCamera(distances, elapsed) {
-        const lead = distances.reduce((best, d, i) => d > distances[best] ? i : best, 0);
-        const p = this._pose(distances[lead], this.layout.off[lead]).position;
-        const orbit = elapsed * 0.04;
-        const target = new THREE.Vector3(p.x * 0.24, 0, p.z * 0.24);
-        this.camera.position.lerp(new THREE.Vector3(Math.sin(orbit) * 24, 58, 112 + Math.cos(orbit) * 8), 0.035);
-        this.camera.lookAt(target.x, 1, target.z);
-    }
-
     _pose(dist, off) {
         const angle = Math.PI / 2 + Math.PI * 2 * (dist / TRACK_LEN);
         const rx = this.layout.rx * 0.12 + off * 0.13;
@@ -293,6 +317,28 @@ export class Race3DRenderer {
             position: new THREE.Vector3(x, 0.05, z),
             yaw: Math.atan2(tangent.x, tangent.z),
         };
+    }
+
+    _makeNumberTexture(number, color) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 160;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 16;
+        ctx.roundRect(12, 12, 232, 136, 28);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#101820";
+        ctx.font = "900 96px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(number), 128, 86);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 4;
+        return texture;
     }
 
     _ovalPoints(off, count) {
