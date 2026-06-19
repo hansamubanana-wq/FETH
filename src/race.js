@@ -2,22 +2,21 @@
 const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
 const SPEED_NOISE = 100;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
 const TRACK_LEN = 820;    // 1周の距離（内部単位）
-const FORM_SPREAD = 0.34; // レースごとの「調子」のばらつき(±34%)。大きいほど波乱(番狂わせ)が増える
+const COND_SPREAD = 0.26; // 調子(コンディション)が実力に与える幅(±26%)。出馬表に表示される
+const RACE_JITTER = 0.12; // 同じ調子でもレース毎に少しブレる幅(±12%)
 const SIM_DT = 1 / 60;    // 事前計算の固定タイムステップ(s)
 const RACE_DURATION = 40; // 1着馬がゴールするまでの秒数（演出尺）
 const TAIL_DURATION = 7;  // 1着後、残りの馬が全員ゴールするまでの秒数（早送り）
 
-// レースごとの実力値。能力(power)にそのレース限定の「調子」を掛ける。
-export function rollPerf(power, rng) {
-    return power * (1 + (rng() - 0.5) * 2 * FORM_SPREAD);
-}
-
-// レース開始時に1頭ぶんの状態を作る。発動可否(active)と発動位置(trigger)を決める。
+// レース開始時に1頭ぶんの状態を作る。
+// 実力 = 基礎能力 × 調子(表示通り) × 毎レースの微ブレ。発動可否(active)と発動位置(trigger)も決める。
 function initRunner(h, rng) {
     const ab = h.ability;
+    const condMult = 1 + (h.condition - 0.5) * 2 * COND_SPREAD; // 調子の効果（出馬表のメーター通り）
+    const perf = h.power * condMult * (1 + (rng() - 0.5) * 2 * RACE_JITTER);
     const active = rng() < ab.proc;                 // 今回そのレースで発動するか
     const trigger = ab.lo + rng() * (ab.hi - ab.lo); // 発動位置
-    return { id: h.id, perf: rollPerf(h.power, rng), style: h.style, ability: ab, active, trigger, x: 0, done: false };
+    return { id: h.id, perf, style: h.style, ability: ab, active, trigger, x: 0, done: false };
 }
 
 // 1ステップの瞬間速度。perf を基準に、脚質(pace)・特殊能力・緩急(noise)を掛ける。

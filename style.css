@@ -449,20 +449,73 @@ button.ghost {
     margin-top: 4px;
 }
 
+.horse-pick .meters {
+    margin: 8px 0 6px;
+    text-align: left;
+}
+
+.horse-pick .meter {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.66rem;
+    margin: 2px 0;
+}
+
+.horse-pick .meter .ml {
+    flex: 0 0 3.4em;
+    color: var(--muted);
+}
+
+.horse-pick .meter .mb {
+    flex: 1;
+    height: 7px;
+    background: var(--bg2);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.horse-pick .meter .mb i {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #4caf50, #8bc34a);
+    border-radius: 4px;
+}
+
+.horse-pick .meter.cond .mb i {
+    background: linear-gradient(90deg, #ff9800, #ffd54f);
+}
+
+.horse-pick .meter .mv {
+    flex: 0 0 auto;
+    min-width: 2.6em;
+    text-align: right;
+    color: var(--text);
+    font-weight: 700;
+}
+
+.horse-pick .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    justify-content: center;
+    margin-top: 4px;
+}
+
 .horse-pick .style {
-    display: inline-block;
-    margin-top: 6px;
     padding: 2px 8px;
     border-radius: 999px;
     background: var(--bg2);
     color: var(--accent);
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 700;
 }
 
 .horse-pick .ability {
-    margin-top: 5px;
-    font-size: 0.76rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 152, 0, 0.12);
+    font-size: 0.72rem;
     font-weight: 700;
     color: #ffb74d;
 }
@@ -470,6 +523,19 @@ button.ghost {
 .horse-pick .ability .proc {
     color: var(--muted);
     font-weight: 600;
+}
+
+#bet-amount {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: 700;
+    padding: 6px 8px;
+    border-radius: 10px;
+    border: 1px solid #2f4a73;
+    background: var(--bg);
+    color: var(--text);
 }
 
 .horse-pick.taken {

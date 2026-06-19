@@ -32,6 +32,15 @@ export function initBetUI() {
             clampBet(); updateAmount(); renderSelection();
         });
     });
+    // 掛け金の直接入力
+    const amt = document.getElementById("bet-amount");
+    amt.addEventListener("input", () => {
+        cur.amount = Math.max(0, Math.floor(Number(amt.value) || 0));
+        if (cur.amount > remaining()) cur.amount = remaining();
+        renderSelection();
+    });
+    amt.addEventListener("change", () => { clampBet(); updateAmount(); renderSelection(); });
+
     document.getElementById("confirm-bet").addEventListener("click", () => {
         if (cur.selection.length === cur.type.nPick) placeTicket([...cur.selection]);
     });
@@ -61,7 +70,7 @@ function clampBet() {
     cur.amount = Math.max(0, Math.min(cur.amount, remaining()));
 }
 function updateAmount() {
-    document.getElementById("bet-amount").textContent = cur.amount;
+    document.getElementById("bet-amount").value = cur.amount;
 }
 function renderBalance() {
     document.getElementById("pick-balance").textContent = remaining();
@@ -82,6 +91,14 @@ function renderTabs() {
     }
     document.getElementById("bettype-desc").textContent = cur.type.desc;
     document.getElementById("pick-instruction").textContent = "↓ " + cur.type.instruction;
+}
+
+// メーター1本ぶんのHTML。v は 0..1。
+function meter(label, v, valText = "", cls = "") {
+    const pct = Math.round(Math.max(0, Math.min(1, v)) * 100);
+    return `<div class="meter ${cls}"><span class="ml">${label}</span>` +
+        `<span class="mb"><i style="width:${pct}%"></i></span>` +
+        `<span class="mv">${valText || pct}</span></div>`;
 }
 
 function renderHorses() {
@@ -105,13 +122,22 @@ function renderHorses() {
         if (selPos >= 0) div.classList.add("selected");
         const badge = (selPos >= 0 && type.ordered) ? `<div class="order-badge">${selPos + 1}</div>` : "";
 
+        const s = h.stats;
         div.innerHTML = `
             ${badge}
             <div class="emoji" style="filter:drop-shadow(0 0 6px ${h.color})">${h.emoji}</div>
             <div class="hname">${h.id + 1}. ${h.name}</div>
             ${oddsLine}
-            <div class="style" title="${h.style.desc}">${h.style.label}</div>
-            <div class="ability" title="${h.ability.desc}">⚡${h.ability.label} <span class="proc">${Math.round(h.ability.proc * 100)}%</span></div>
+            <div class="meters">
+                ${meter("スピード", s.speed)}
+                ${meter("スタミナ", s.stamina)}
+                ${meter("瞬発力", s.kick)}
+                ${meter("調子", s.condition, `${h.condMark}${h.condLabel}`, "cond")}
+            </div>
+            <div class="tags">
+                <span class="style" title="${h.style.desc}">${h.style.label}</span>
+                <span class="ability" title="${h.ability.desc}">⚡${h.ability.label} <span class="proc">${Math.round(h.ability.proc * 100)}%</span></span>
+            </div>
         `;
         div.addEventListener("click", () => tapHorse(h));
         grid.appendChild(div);

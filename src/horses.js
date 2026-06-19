@@ -14,14 +14,12 @@ export const HORSE_POOL = [
     { name: "モリノセンシ", emoji: "🐎", color: "#aed581" },
 ];
 
-// 脚質。profile(t) は進行度 t(0=スタート,1=ゴール) に対する速度倍率。
-// どの脚質も平均は約1.0になるよう設計し、得意なタイミングが違うだけにしてある。
-// 緩急を大きめにして、前半と後半で大きく順位が入れ替わる（追い抜きが激しい）展開にする。
+// 脚質。profile(t) は進行度 t(0=スタート,1=ゴール) に対する速度倍率。stamina はメーター表示用。
 export const STYLES = {
-    nige: { key: "nige", label: "逃げ", desc: "前半で大きくリード", profile: (t) => 1.34 - 0.68 * t },
-    senko: { key: "senko", label: "先行", desc: "前めにつけて押し切る", profile: (t) => 1.16 - 0.32 * t },
-    sashi: { key: "sashi", label: "差し", desc: "後半にぐっと伸びる", profile: (t) => 0.84 + 0.32 * t },
-    oikomi: { key: "oikomi", label: "追込", desc: "最後方から大外一気", profile: (t) => 0.64 + 0.72 * t },
+    nige: { key: "nige", label: "逃げ", desc: "前半で大きくリード", stamina: 0.2, profile: (t) => 1.34 - 0.68 * t },
+    senko: { key: "senko", label: "先行", desc: "前めにつけて押し切る", stamina: 0.45, profile: (t) => 1.16 - 0.32 * t },
+    sashi: { key: "sashi", label: "差し", desc: "後半にぐっと伸びる", stamina: 0.7, profile: (t) => 0.84 + 0.32 * t },
+    oikomi: { key: "oikomi", label: "追込", desc: "最後方から大外一気", stamina: 0.92, profile: (t) => 0.64 + 0.72 * t },
 };
 const STYLE_KEYS = Object.keys(STYLES);
 
@@ -42,8 +40,17 @@ export const ABILITIES = [
     { key: "monster", label: "怪物", desc: "めったに出ないが、出れば手がつけられない", proc: 0.12, lo: 0.28, hi: 0.70, dur: 0.30, boost: 1.25, penalty: 0.96 },
 ];
 
-// 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)・脚質・特殊能力を付与。
-// rng を渡すと決定論的に生成できる。names を渡すと馬名を上書きできる（共有プール用）。
+// 調子（コンディション）のラベル。c は 0..1。
+function conditionLabel(c) {
+    if (c >= 0.8) return { label: "絶好調", mark: "◎" };
+    if (c >= 0.6) return { label: "好調", mark: "○" };
+    if (c >= 0.4) return { label: "普通", mark: "△" };
+    if (c >= 0.2) return { label: "平凡", mark: "▲" };
+    return { label: "不調", mark: "✕" };
+}
+
+// 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)・脚質・特殊能力・調子・
+// 表示用ステータスを付与。rng で決定論的、names で馬名上書き可。
 export function drawHorses(n, rng = Math.random, names = null) {
     const pool = [...HORSE_POOL];
     for (let i = pool.length - 1; i > 0; i--) {
@@ -51,18 +58,26 @@ export function drawHorses(n, rng = Math.random, names = null) {
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool.slice(0, n).map((h, i) => {
-        // 基礎能力。馬ごとの差を出しつつ、開きすぎないよう幅は控えめに。
-        const power = 0.90 + rng() * 0.28;
+        const power = 0.90 + rng() * 0.28;                 // 基礎能力
         const style = STYLES[STYLE_KEYS[Math.floor(rng() * STYLE_KEYS.length)]];
-        const ability = ABILITIES[Math.floor(rng() * ABILITIES.length)]; // 全馬が必ず1つ持つ
+        const ability = ABILITIES[Math.floor(rng() * ABILITIES.length)];
+        const condition = rng();                           // この回の調子 0..1
+        const cl = conditionLabel(condition);
+        // 表示メーター（すべて実際の挙動を決める値から算出＝見た目通りに走る）
+        const stats = {
+            speed: (power - 0.90) / 0.28,                   // スピード ← 基礎能力
+            stamina: style.stamina,                         // スタミナ ← 脚質
+            kick: Math.min(1, ability.boost / 1.25),        // 瞬発力 ← 特殊能力の最大加速
+            condition,                                      // 調子
+        };
         return {
             id: i,
             name: (names && names[i]) ? names[i] : h.name,
             emoji: h.emoji,
             color: h.color,
-            power,
-            style,
-            ability,
+            power, style, ability,
+            condition, condLabel: cl.label, condMark: cl.mark,
+            stats,
             backers: [],
         };
     });
