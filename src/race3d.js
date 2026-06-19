@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
 const HORSE_MODEL_URL = "https://threejs.org/examples/models/gltf/Horse.glb";
+const GRASS_TEXTURE_URL = "https://threejs.org/examples/textures/terrain/grasslight-big.jpg";
 const TRACK_LEN = 820;
 const CENTER_RX_SCALE = 0.13;
 const CENTER_RZ_SCALE = 0.16;
@@ -120,11 +121,16 @@ export class Race3DRenderer {
 
         const turf = new THREE.Mesh(
             new THREE.PlaneGeometry(220, 150, 1, 1),
-            new THREE.MeshStandardMaterial({ color: 0x1f7f35, roughness: 0.92 })
+            new THREE.MeshStandardMaterial({
+                color: 0x2d8a3b,
+                map: this._createFallbackGrassTexture(),
+                roughness: 0.94,
+            })
         );
         turf.rotation.x = -Math.PI / 2;
         turf.receiveShadow = true;
         this.root.add(turf);
+        this._loadGrassTexture(turf.material);
 
         this._addTrack();
         this._addRails();
@@ -153,6 +159,56 @@ export class Race3DRenderer {
                 this.root.add(line);
             }
         }
+    }
+
+    _loadGrassTexture(material) {
+        new THREE.TextureLoader().load(
+            GRASS_TEXTURE_URL,
+            (texture) => {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(18, 12);
+                texture.colorSpace = THREE.SRGBColorSpace;
+                texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+                material.map = texture;
+                material.color.set(0x2f8f3d);
+                material.needsUpdate = true;
+            },
+            undefined,
+            () => {
+                material.map = this._createFallbackGrassTexture();
+                material.needsUpdate = true;
+            }
+        );
+    }
+
+    _createFallbackGrassTexture() {
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#287d35";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < 3600; i++) {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            const len = 4 + Math.random() * 9;
+            const hue = 105 + Math.random() * 28;
+            const light = 24 + Math.random() * 24;
+            ctx.strokeStyle = `hsla(${hue}, 55%, ${light}%, ${0.28 + Math.random() * 0.38})`;
+            ctx.lineWidth = Math.random() < 0.85 ? 1 : 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + Math.random() * 3 - 1.5, y - len);
+            ctx.stroke();
+        }
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(18, 12);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+        return texture;
     }
 
     _addRails() {
