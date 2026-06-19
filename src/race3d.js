@@ -18,6 +18,7 @@ export class Race3DRenderer {
         this.ready = false;
         this.mixers = [];
         this.horseGroups = [];
+        this.numberPlates = [];
         this.boostRings = [];
 
         this.scene = new THREE.Scene();
@@ -75,6 +76,13 @@ export class Race3DRenderer {
             group.position.copy(pose.position);
             group.rotation.y = pose.yaw + Math.PI * 1.5;
             group.visible = true;
+
+            const plate = this.numberPlates[i];
+            if (plate) {
+                plate.position.copy(pose.position).add(new THREE.Vector3(0, 3.25, 0));
+                plate.quaternion.copy(this.camera.quaternion);
+                plate.visible = true;
+            }
 
             const t = distances[i] / TRACK_LEN;
             const boosting = distances[i] < TRACK_LEN - 0.5 &&
@@ -266,11 +274,10 @@ export class Race3DRenderer {
                     depthTest: false,
                 })
             );
-            numberPlate.rotation.x = -Math.PI / 2;
-            numberPlate.rotation.z = Math.PI;
-            numberPlate.position.set(0, 2.45, 0);
+            numberPlate.visible = false;
             numberPlate.renderOrder = 10;
-            group.add(numberPlate);
+            this.numberPlates.push(numberPlate);
+            this.root.add(numberPlate);
 
             const ring = new THREE.Mesh(
                 new THREE.RingGeometry(1.35, 1.6, 64),
