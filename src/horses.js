@@ -40,16 +40,7 @@ export const ABILITIES = [
     { key: "monster", label: "怪物", desc: "めったに出ないが、出れば手がつけられない", proc: 0.12, lo: 0.28, hi: 0.70, dur: 0.30, boost: 1.25, penalty: 0.96 },
 ];
 
-// 調子（コンディション）のラベル。c は 0..1。5段階で文字表示する。
-function conditionLabel(c) {
-    if (c >= 0.8) return { label: "絶好調", mark: "◎", lv: 5 };
-    if (c >= 0.6) return { label: "好調", mark: "○", lv: 4 };
-    if (c >= 0.4) return { label: "普通", mark: "△", lv: 3 };
-    if (c >= 0.2) return { label: "平凡", mark: "▲", lv: 2 };
-    return { label: "不調", mark: "✕", lv: 1 };
-}
-
-// 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)・脚質・特殊能力・調子・
+// 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)・脚質・特殊能力・
 // 表示用ステータスを付与。rng で決定論的、names で馬名上書き可。
 export function drawHorses(n, rng = Math.random, names = null) {
     const pool = [...HORSE_POOL];
@@ -61,9 +52,7 @@ export function drawHorses(n, rng = Math.random, names = null) {
         const power = 0.94 + rng() * 0.20;                 // 基礎能力（0.94〜1.14）
         const style = STYLES[STYLE_KEYS[Math.floor(rng() * STYLE_KEYS.length)]];
         const ability = ABILITIES[Math.floor(rng() * ABILITIES.length)];
-        const condition = rng();                           // この回の調子 0..1
-        const cl = conditionLabel(condition);
-        // 表示メーター（実際の挙動を決める値から算出＝見た目通りに走る）。調子は別途テキスト表示。
+        // 表示メーター（実際の挙動を決める値から算出＝見た目通りに走る）
         const stats = {
             speed: (power - 0.94) / 0.20,                   // スピード ← 基礎能力
             stamina: style.stamina,                         // スタミナ ← 脚質
@@ -75,7 +64,6 @@ export function drawHorses(n, rng = Math.random, names = null) {
             emoji: h.emoji,
             color: h.color,
             power, style, ability,
-            condition, condLabel: cl.label, condMark: cl.mark, condLv: cl.lv,
             stats,
             backers: [],
         };

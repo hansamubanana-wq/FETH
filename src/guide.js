@@ -51,20 +51,12 @@ export function buildGuideHTML(betTypes, abilities, styles, placeN) {
         </ul>
         <p class="guide-note">脚質：</p><ul class="guide-list">${styleRows}</ul>`),
 
-        sec("🔥 調子（ここが狙い目）", `<ul>
-            <li>各馬は毎回 <b>絶好調◎ / 好調○ / 普通△ / 平凡▲ / 不調✕</b> の調子を持ちます。</li>
-            <li><b>調子はオッズに入っていません。</b>実際のレースには効きます。</li>
-            <li>つまり <b>好調・絶好調の馬はオッズより強い＝おいしい買い目</b>。
-                逆に人気でも不調なら危険。<b>調子を読めるほど勝てます。</b></li>
-        </ul>`),
-
         sec("⚡ 特殊能力（全種）", `<p class="guide-note">全馬が必ず1つ持ち、レース中に確率で発動します。
             発動しなくても出馬表には常に表示。発動率が低いほど当たれば大きい傾向。</p>
             <table class="ab-table"><thead><tr><th>能力</th><th>発動率</th><th>効果</th></tr></thead>
             <tbody>${abRows}</tbody></table>`),
 
         sec("🏆 勝つためのコツ", `<ul>
-            <li><b>調子を最優先</b>でチェック。好調×人気薄は高配当のチャンス。</li>
             <li>本命を厚く、穴を連系（馬連・3連単など）で薄く、の組み合わせが面白い。</li>
             <li><b>発動率の高い能力</b>（持久力・好スタート等）は計算が立てやすい。
                 <b>怪物・一発</b>は低確率だがハマれば大荒れ＝穴の主役。</li>

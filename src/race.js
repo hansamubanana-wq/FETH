@@ -2,19 +2,15 @@
 const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
 const SPEED_NOISE = 100;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
 const TRACK_LEN = 820;    // 1周の距離（内部単位）
-const COND_SPREAD = 0.12; // 調子(コンディション)が実力に与える幅(±12%)。控えめ。出馬表に表示される
-const RACE_JITTER = 0.21; // 同じ調子でもレース毎にブレる幅(±21%)。弱い馬にも一発がある
+const RACE_JITTER = 0.24; // レース毎に実力がブレる幅(±24%)。弱い馬にも一発がある
 const SIM_DT = 1 / 60;    // 事前計算の固定タイムステップ(s)
 const RACE_DURATION = 40; // 1着馬がゴールするまでの秒数（演出尺）
 const TAIL_DURATION = 7;  // 1着後、残りの馬が全員ゴールするまでの秒数（早送り）
 
-// レース開始時に1頭ぶんの状態を作る。
-// 実力 = 基礎能力 × 調子 × 毎レースの微ブレ。
-// ignoreCondition=true のときは調子を無視（オッズ算出用。調子はオッズに織り込まない）。
-function initRunner(h, rng, ignoreCondition = false) {
+// レース開始時に1頭ぶんの状態を作る。実力 = 基礎能力 × 毎レースの実力ブレ。
+function initRunner(h, rng) {
     const ab = h.ability;
-    const condMult = ignoreCondition ? 1 : 1 + (h.condition - 0.5) * 2 * COND_SPREAD;
-    const perf = h.power * condMult * (1 + (rng() - 0.5) * 2 * RACE_JITTER);
+    const perf = h.power * (1 + (rng() - 0.5) * 2 * RACE_JITTER);
     const active = rng() < ab.proc;                 // 今回そのレースで発動するか
     const trigger = ab.lo + rng() * (ab.hi - ab.lo); // 発動位置
     return { id: h.id, perf, style: h.style, ability: ab, active, trigger, x: 0, done: false };
@@ -33,9 +29,8 @@ function computeSpeed(r, t, rng) {
 }
 
 // 着順(horse.id配列)だけを返す軽量シミュレーション。オッズ算出用。
-// ignoreCondition=true で調子を無視（オッズに調子を入れない）。
-export function simulateOrder(horses, rng, ignoreCondition = false) {
-    const runners = horses.map((h) => initRunner(h, rng, ignoreCondition));
+export function simulateOrder(horses, rng) {
+    const runners = horses.map((h) => initRunner(h, rng));
     const order = [];
     while (order.length < runners.length) {
         for (const r of runners) {

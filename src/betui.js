@@ -128,7 +128,6 @@ function renderHorses() {
             <div class="emoji" style="filter:drop-shadow(0 0 6px ${h.color})">${h.emoji}</div>
             <div class="hname">${h.id + 1}. ${h.name}</div>
             ${oddsLine}
-            <div class="cond cond-lv${h.condLv}">調子 ${h.condMark} ${h.condLabel}</div>
             <div class="meters">
                 ${meter("スピード", s.speed)}
                 ${meter("スタミナ", s.stamina)}
