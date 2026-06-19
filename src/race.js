@@ -2,8 +2,8 @@
 const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
 const SPEED_NOISE = 100;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
 const TRACK_LEN = 820;    // 1周の距離（内部単位）
-const COND_SPREAD = 0.26; // 調子(コンディション)が実力に与える幅(±26%)。出馬表に表示される
-const RACE_JITTER = 0.12; // 同じ調子でもレース毎に少しブレる幅(±12%)
+const COND_SPREAD = 0.20; // 調子(コンディション)が実力に与える幅(±20%)。出馬表に表示される
+const RACE_JITTER = 0.21; // 同じ調子でもレース毎にブレる幅(±21%)。弱い馬にも一発がある
 const SIM_DT = 1 / 60;    // 事前計算の固定タイムステップ(s)
 const RACE_DURATION = 40; // 1着馬がゴールするまでの秒数（演出尺）
 const TAIL_DURATION = 7;  // 1着後、残りの馬が全員ゴールするまでの秒数（早送り）

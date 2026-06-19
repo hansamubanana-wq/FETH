@@ -3,14 +3,23 @@
 import { drawHorses } from "./horses.js";
 import { simulateOrder } from "./race.js";
 import { makeRng } from "./rng.js";
-import { buildBetTypes, evalOdds } from "./bets.js";
+import { buildBetTypes } from "./bets.js";
 
 export const NUM_HORSES = 8; // 出走頭数は8頭固定
 export const PLACE_N = 3;    // 8頭なので複勝・ワイドは3着以内
-const SIM_RUNS = 3000;       // オッズ算出のシミュレーション回数
+const SIM_RUNS = 6000;       // オッズ算出のシミュレーション回数
+const PAYOUT = 0.8;          // 払戻率（控除20%）
+const ODDS_CAP = 999.9;
+
+// ハーヴィル方式：単勝確率 p から連系の的中確率を解析的に出す（0回でも有限値になる）
+function exactaP(p, a, b) { const d = 1 - p[a]; return d > 1e-9 ? p[a] * p[b] / d : 0; }
+function trifectaP(p, a, b, c) {
+    const d1 = 1 - p[a], d2 = 1 - p[a] - p[b];
+    return (d1 > 1e-9 && d2 > 1e-9) ? p[a] * (p[b] / d1) * (p[c] / d2) : 0;
+}
+const PERM3 = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 
 // horseSeed から、その回の馬・賭け式・オッズ計算機を作る。
-// names を渡すと馬名を上書きできる（共有プールの名前を全端末で一致させる用）。
 export function buildRace(horseSeed, names = null) {
     const horses = drawHorses(NUM_HORSES, makeRng(horseSeed), names);
     const betTypes = buildBetTypes(PLACE_N).filter((t) => NUM_HORSES >= t.nPick);
@@ -21,7 +30,48 @@ export function buildRace(horseSeed, names = null) {
     const sims = [];
     for (let i = 0; i < SIM_RUNS; i++) sims.push(simulateOrder(horses, rng));
 
-    const oddsFor = (typeKey, sel) => evalOdds(byKey[typeKey], sel, sims);
+    // 単勝確率（スムージングして 0 を避ける）
+    const n = NUM_HORSES;
+    const wc = new Array(n).fill(0);
+    for (const o of sims) wc[o[0]]++;
+    const winP = wc.map((c) => (c + 0.5) / (SIM_RUNS + 0.5 * n));
+
+    const countHits = (pred) => { let h = 0; for (const o of sims) if (pred(o)) h++; return h; };
+    const toOdds = (p) => Math.min(ODDS_CAP, Math.max(1.0, Math.round(PAYOUT / p * 10) / 10));
+    const empiricalP = (hits) => (hits + 0.5) / (SIM_RUNS + 1);
+    // 出目が十分あればシミュ実測（正確）、少なければ確率モデルで補完（999に張り付かせない）
+    const MIN_HITS = 8;
+    const blended = (hits, harvilleP) =>
+        hits >= MIN_HITS ? empiricalP(hits) : Math.max(harvilleP, empiricalP(hits));
+
+    const oddsFor = (typeKey, sel) => {
+        switch (typeKey) {
+            case "win": return toOdds(winP[sel[0]]);
+            case "place": return toOdds(empiricalP(countHits((o) => o.indexOf(sel[0]) < PLACE_N)));
+            case "wide": return toOdds(empiricalP(countHits((o) => sel.every((id) => o.indexOf(id) < PLACE_N))));
+            case "quinella": {
+                const [a, b] = sel;
+                const hits = countHits((o) => (o[0] === a && o[1] === b) || (o[0] === b && o[1] === a));
+                return toOdds(blended(hits, exactaP(winP, a, b) + exactaP(winP, b, a)));
+            }
+            case "exacta": {
+                const [a, b] = sel;
+                return toOdds(blended(countHits((o) => o[0] === a && o[1] === b), exactaP(winP, a, b)));
+            }
+            case "trio": {
+                const set = new Set(sel);
+                const hits = countHits((o) => set.has(o[0]) && set.has(o[1]) && set.has(o[2]));
+                let hp = 0; for (const [a, b, c] of PERM3) hp += trifectaP(winP, sel[a], sel[b], sel[c]);
+                return toOdds(blended(hits, hp));
+            }
+            case "trifecta": {
+                const [a, b, c] = sel;
+                const hits = countHits((o) => o[0] === a && o[1] === b && o[2] === c);
+                return toOdds(blended(hits, trifectaP(winP, a, b, c)));
+            }
+            default: return toOdds(empiricalP(countHits((o) => byKey[typeKey].test(o, sel))));
+        }
+    };
     return { horses, betTypes, byKey, oddsFor };
 }
 

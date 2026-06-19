@@ -58,14 +58,14 @@ export function drawHorses(n, rng = Math.random, names = null) {
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool.slice(0, n).map((h, i) => {
-        const power = 0.90 + rng() * 0.28;                 // 基礎能力
+        const power = 0.94 + rng() * 0.20;                 // 基礎能力（0.94〜1.14）
         const style = STYLES[STYLE_KEYS[Math.floor(rng() * STYLE_KEYS.length)]];
         const ability = ABILITIES[Math.floor(rng() * ABILITIES.length)];
         const condition = rng();                           // この回の調子 0..1
         const cl = conditionLabel(condition);
         // 表示メーター（すべて実際の挙動を決める値から算出＝見た目通りに走る）
         const stats = {
-            speed: (power - 0.90) / 0.28,                   // スピード ← 基礎能力
+            speed: (power - 0.94) / 0.20,                   // スピード ← 基礎能力
             stamina: style.stamina,                         // スタミナ ← 脚質
             kick: Math.min(1, ability.boost / 1.25),        // 瞬発力 ← 特殊能力の最大加速
             condition,                                      // 調子
