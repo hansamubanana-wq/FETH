@@ -344,9 +344,9 @@ export class Race3DRenderer {
             this.root.add(numberPlate);
 
             const boostLabel = new THREE.Mesh(
-                new THREE.PlaneGeometry(4.4, 1.45),
+                new THREE.PlaneGeometry(6.2, 1.9),
                 new THREE.MeshBasicMaterial({
-                    map: this._makeBoostTexture(),
+                    map: this._makeAbilityTexture(this.data.abLabel[i] || "SPECIAL"),
                     transparent: true,
                     side: THREE.DoubleSide,
                     depthTest: false,
@@ -430,28 +430,28 @@ export class Race3DRenderer {
         return texture;
     }
 
-    _makeBoostTexture() {
+    _makeAbilityTexture(label) {
         const canvas = document.createElement("canvas");
-        canvas.width = 512;
-        canvas.height = 168;
+        canvas.width = 768;
+        canvas.height = 220;
         const ctx = canvas.getContext("2d");
         const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
         gradient.addColorStop(0, "rgba(255, 112, 24, 0.96)");
         gradient.addColorStop(1, "rgba(255, 214, 64, 0.96)");
         ctx.fillStyle = gradient;
         ctx.strokeStyle = "rgba(64, 24, 0, 0.88)";
-        ctx.lineWidth = 12;
-        ctx.roundRect(18, 22, 476, 112, 34);
+        ctx.lineWidth = 14;
+        ctx.roundRect(20, 24, 728, 150, 40);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = "#ffffff";
         ctx.strokeStyle = "rgba(64, 24, 0, 0.9)";
-        ctx.lineWidth = 8;
-        ctx.font = "900 76px system-ui, sans-serif";
+        ctx.lineWidth = 9;
+        ctx.font = "900 84px system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.strokeText("BOOST!", 256, 82);
-        ctx.fillText("BOOST!", 256, 82);
+        ctx.strokeText(`SPECIAL: ${label}`, 384, 102);
+        ctx.fillText(`SPECIAL: ${label}`, 384, 102);
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = 4;
