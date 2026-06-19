@@ -4,6 +4,9 @@ import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
 const HORSE_MODEL_URL = "https://threejs.org/examples/models/gltf/Horse.glb";
 const TRACK_LEN = 820;
+const CENTER_RX_SCALE = 0.12;
+const CENTER_RZ_SCALE = 0.13;
+const HORSE_LINE_SPREAD = 0.028;
 
 export class Race3DRenderer {
     constructor(canvas, horses, data, layout) {
@@ -22,7 +25,7 @@ export class Race3DRenderer {
         this.scene.fog = new THREE.Fog(0x8cc3e3, 90, 230);
 
         this.camera = new THREE.OrthographicCamera(-62, 62, 35, -35, 0.1, 300);
-        this.camera.position.set(0, 145, 18);
+        this.camera.position.set(0, 120, 44);
         this.camera.up.set(0, 0, -1);
         this.camera.lookAt(0, 0, 0);
 
@@ -49,7 +52,7 @@ export class Race3DRenderer {
         const width = Math.max(320, Math.floor(rect.width || this.canvas.clientWidth || 960));
         const height = Math.max(240, Math.floor(width * 0.5625));
         this.renderer.setSize(width, height, false);
-        const frustumHeight = 76;
+        const frustumHeight = 82;
         const frustumWidth = frustumHeight * (width / height);
         this.camera.left = -frustumWidth / 2;
         this.camera.right = frustumWidth / 2;
@@ -240,7 +243,7 @@ export class Race3DRenderer {
                 obj.receiveShadow = true;
                 if (obj.material) {
                     obj.material = obj.material.clone();
-                    obj.material.color.lerp(new THREE.Color(horse.color), 0.28);
+                    obj.material.color.copy(new THREE.Color(horse.color));
                     obj.material.roughness = 0.72;
                 }
             });
@@ -264,6 +267,7 @@ export class Race3DRenderer {
                 })
             );
             numberPlate.rotation.x = -Math.PI / 2;
+            numberPlate.rotation.z = Math.PI;
             numberPlate.position.set(0, 2.45, 0);
             numberPlate.renderOrder = 10;
             group.add(numberPlate);
@@ -308,8 +312,8 @@ export class Race3DRenderer {
 
     _pose(dist, off) {
         const angle = Math.PI / 2 + Math.PI * 2 * (dist / TRACK_LEN);
-        const rx = this.layout.rx * 0.12 + off * 0.13;
-        const rz = this.layout.ry * 0.13 + off * 0.13;
+        const rx = this.layout.rx * CENTER_RX_SCALE + off * HORSE_LINE_SPREAD;
+        const rz = this.layout.ry * CENTER_RZ_SCALE + off * HORSE_LINE_SPREAD;
         const x = Math.cos(angle) * rx;
         const z = Math.sin(angle) * rz;
         const tangent = new THREE.Vector3(-Math.sin(angle) * rx, 0, Math.cos(angle) * rz).normalize();
@@ -343,8 +347,8 @@ export class Race3DRenderer {
 
     _ovalPoints(off, count) {
         const points = [];
-        const rx = this.layout.rx * 0.12 + off * 0.13;
-        const rz = this.layout.ry * 0.13 + off * 0.13;
+        const rx = this.layout.rx * CENTER_RX_SCALE + off * 0.13;
+        const rz = this.layout.ry * CENTER_RZ_SCALE + off * 0.13;
         for (let i = 0; i < count; i++) {
             const a = (i / count) * Math.PI * 2;
             points.push(new THREE.Vector3(Math.cos(a) * rx, 0.03, Math.sin(a) * rz));
