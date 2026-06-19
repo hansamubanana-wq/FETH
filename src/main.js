@@ -3,6 +3,10 @@ import { showScreen } from "./ui.js";
 import { initBetUI } from "./betui.js";
 import { initLocal, enterLocalSetup } from "./local.js";
 import { initOnline, enterOnlineHome, reconnectIfPossible, inRoom, requestLeave, preloadNames } from "./online.js";
+import { ABILITIES, STYLES } from "./horses.js";
+import { buildBetTypes } from "./bets.js";
+import { PLACE_N } from "./engine.js";
+import { buildGuideHTML } from "./guide.js";
 
 // ---- ズーム禁止 ----
 document.addEventListener("gesturestart", (e) => e.preventDefault());
@@ -26,6 +30,11 @@ initOnline();
 // ---- ホーム画面の遷移 ----
 document.getElementById("go-local").addEventListener("click", enterLocalSetup);
 document.getElementById("go-online").addEventListener("click", enterOnlineHome);
+document.getElementById("go-guide").addEventListener("click", () => {
+    document.getElementById("guide-content").innerHTML =
+        buildGuideHTML(buildBetTypes(PLACE_N), ABILITIES, STYLES, PLACE_N);
+    showScreen("screen-guide");
+});
 
 document.querySelectorAll("[data-home]").forEach((b) =>
     b.addEventListener("click", () => showScreen("screen-home")));
