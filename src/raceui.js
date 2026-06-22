@@ -8,6 +8,7 @@ const LIVE_INTERVAL = 130; // ライブ表示の更新間隔(ms)
 
 let liveCtx = null;     // { engine, players:[{name,tickets}], bettorMap }
 let lastLive = 0;
+let abilityLive = null;
 
 // raceSeed と horses からレースを再生する。
 //  context（任意）= { engine, players:[{name,tickets}] } を渡すと
@@ -20,6 +21,7 @@ export function playRace(horses, raceSeed, context = null) {
     const canvas = document.getElementById("track");
     const status = document.getElementById("race-status");
 
+    setupAbilityLive(horses, raceData);
     setupLive(context);
 
     const race = new Race(canvas, horses, raceData);
@@ -33,13 +35,15 @@ export function playRace(horses, raceSeed, context = null) {
             if (c > 0) { status.textContent = c; return; }
             clearInterval(timer);
             status.textContent = "🏇 レース中！";
-            race.onTick = (ordered) => {
+            race.onTick = (ordered, distances) => {
                 status.textContent = `🏇 先頭: ${ordered[0].name}`;
                 updateLive(ordered);
+                updateAbilityLive(distances);
             };
             race.onFinish = (ordered) => {
                 race.onTick = null;
                 updateLive(ordered, true);
+                finishAbilityLive();
                     status.textContent = `ゴール！ 1着 ${ordered[0].name}`;
                     setTimeout(() => resolve(ordered), 1300);
             };
@@ -68,6 +72,73 @@ function setupLive(context) {
         ids.forEach((id) => { if (bettorMap[id]) bettorMap[id].push(p.name); });
     });
     liveCtx = { engine: context.engine, players: context.players, bettorMap };
+}
+
+function setupAbilityLive(horses, raceData) {
+    const el = document.getElementById("live-abilities");
+    const events = (raceData.abilityEvents || []).map((ev) => {
+        const horse = horses.find((h) => h.id === ev.horseId);
+        return {
+            ...ev,
+            horseName: horse ? horse.name : `Horse ${ev.horseId + 1}`,
+            number: ev.horseId + 1,
+            color: horse ? horse.color : "#ffb74d",
+            seen: false,
+        };
+    });
+    abilityLive = { events, trackLen: raceData.trackLen || 820 };
+    if (el) {
+        el.innerHTML = "";
+        events
+            .slice()
+            .sort((a, b) => (a.active === b.active ? a.from - b.from : Number(b.active) - Number(a.active)))
+            .slice(0, 8)
+            .forEach((ev) => el.appendChild(abilityRow(ev, ev.active ? "waiting" : "miss")));
+    }
+}
+
+function updateAbilityLive(distances) {
+    if (!abilityLive || !distances) return;
+    let changed = false;
+    abilityLive.events.forEach((ev) => {
+        if (!ev.active || ev.seen) return;
+        const t = (distances[ev.horseId] || 0) / abilityLive.trackLen;
+        if (t >= ev.from && t <= ev.to + 0.03) {
+            ev.seen = true;
+            changed = true;
+        }
+    });
+    if (changed) renderAbilityLive(false);
+}
+
+function finishAbilityLive() {
+    if (!abilityLive) return;
+    renderAbilityLive(true);
+}
+
+function renderAbilityLive(final = false) {
+    const el = document.getElementById("live-abilities");
+    if (!el || !abilityLive) return;
+    el.innerHTML = "";
+    const fired = abilityLive.events.filter((ev) => ev.seen);
+    const pending = abilityLive.events.filter((ev) => ev.active && !ev.seen);
+    const misses = abilityLive.events.filter((ev) => !ev.active);
+    const rows = final
+        ? [...fired, ...misses].slice(0, 8)
+        : [...fired.slice(-5).reverse(), ...pending.slice(0, 3)];
+    rows.forEach((ev) => el.appendChild(abilityRow(ev, ev.seen ? "active" : (ev.active ? "waiting" : "miss"))));
+}
+
+function abilityRow(ev, state) {
+    const li = document.createElement("li");
+    li.className = `ability-log ${state}`;
+    const status = state === "active" ? "発動" : state === "miss" ? "不発" : "待機";
+    li.innerHTML = `
+        <span class="ability-num" style="background:${ev.color}">${ev.number}</span>
+        <span class="ability-name">${ev.label}</span>
+        <span class="ability-state">${status}</span>
+    `;
+    return li;
 }
 
 function updateLive(ordered, force = false) {

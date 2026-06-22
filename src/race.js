@@ -84,8 +84,16 @@ export function simulateRaceData(horses, rng) {
     const abFrom = runners.map((r) => (r.active ? r.trigger : -1));
     const abTo = runners.map((r) => (r.active ? r.trigger + r.ability.dur : -1));
     const abLabel = runners.map((r) => (r.active ? r.ability.label : null));
+    const abilityEvents = runners.map((r) => ({
+        horseId: r.id,
+        label: r.ability.label,
+        active: r.active,
+        from: r.active ? r.trigger : -1,
+        to: r.active ? r.trigger + r.ability.dur : -1,
+        boost: r.ability.boost || 0,
+    }));
 
-    return { dt: SIM_DT, frames, order, finishTime, gap, trackLen: TRACK_LEN, abFrom, abTo, abLabel };
+    return { dt: SIM_DT, frames, order, finishTime, gap, trackLen: TRACK_LEN, abFrom, abTo, abLabel, abilityEvents };
 }
 
 // 事前計算した raceData を canvas に実時間で再生するプレイヤー（オーバルコース1周）。
@@ -168,7 +176,7 @@ export class Race {
             this._dist[i] = frames[f0][i] + (frames[f1][i] - frames[f0][i]) * alpha;
         }
         this._draw(elapsed);
-        if (this.onTick) this.onTick(this._currentOrder());
+        if (this.onTick) this.onTick(this._currentOrder(), this._dist.slice(), elapsed);
 
         if (allDone) {
             // 全馬ゴール → 結果へ

@@ -1,19 +1,27 @@
 # みんなで競馬
 
-ローカル対戦とオンライン対戦に対応した、ブラウザで遊べる競馬ベットゲームです。レース画面は Three.js を使った3D描画に対応し、外部GLBアセットの馬モデルを読み込んで走らせます。
+ブラウザで遊べる競馬ベットゲームです。ローカル対戦と Firebase Firestore を使ったオンライン対戦に対応し、Three.js の3Dレース場と外部GLB馬モデルでレースを再生します。
 
 ## 主な機能
 
 - 8頭立てのレースシミュレーション
-- 単勝、複勝、馬連、馬単、ワイド、三連複、三連単のベット
+- 単勝、複勝、馬連、馬単、ワイド、3連複、3連単のベット
 - ローカル複数人プレイ
-- Firebase設定時のオンライン部屋作成・参加
-- 3D競馬場、外部馬モデル、ライブ順位表示
+- Firebase Firestore を使ったオンライン部屋作成・参加
+- 一緒に遊んだ人のフレンド化と招待
+- 初回入力したプレイヤー名の保存
+- 3Dレース場、外部馬モデル、芝テクスチャ、ゴールライン表示
+- レース中の順位、損益、特殊能力ログ表示
+- 破産中プレイヤーの単勝復活チャレンジ
+- サーバー保存済み馬名の共有・追加・削除
 - スマホ、タブレット、PC向けレスポンシブ表示
+- favicon、アプリアイコン、OGP画像付き
 
 ## 使用技術
 
-- HTML / CSS / JavaScript
+- HTML
+- CSS
+- JavaScript
 - Three.js
 - GLTFLoader
 - Firebase Firestore
@@ -24,14 +32,15 @@
 python -m http.server 5173
 ```
 
-ブラウザで `http://localhost:5173/` を開きます。
-Windowsで `python` がMicrosoft Storeのエイリアスを指す場合は、代わりに次を使えます。
+Windowsで `python` が Microsoft Store のエイリアスを指す場合は、代わりに次を使います。
 
 ```bash
 py -m http.server 5173
 ```
 
-オンライン対戦を使う場合は `src/firebase-config.js` にFirebase設定を入れてください。
+ブラウザで `http://localhost:5173/` を開いてください。
+
+オンライン対戦を使う場合は、`src/firebase-config.js` に Firebase 設定を入れます。
 
 ## ディレクトリ構成
 
@@ -42,6 +51,10 @@ py -m http.server 5173
 │   ├── favicon.svg
 │   └── ogp.svg
 ├── src/
+│   ├── betui.js
+│   ├── engine.js
+│   ├── local.js
+│   ├── online.js
 │   ├── race.js
 │   ├── race3d.js
 │   ├── raceui.js
@@ -54,8 +67,8 @@ py -m http.server 5173
 
 ## 今後の改善案
 
-- 馬モデル、騎手、観客席、実況演出の追加
-- レース中カメラの切り替え
-- スタートゲートやゴール写真演出の3D化
-- PWA対応と192x192 / 512x512 PNGアイコン追加
-- 文字化けしている既存UI文言の整理
+- Firestore 更新を transaction 化してオンライン同時操作により強くする
+- フレンド情報をサーバー側にも保存して別端末でも引き継ぐ
+- 馬名削除の取り消し機能を追加する
+- スマホ画面でのオンライン複数人プレイをさらに検証する
+- PWA対応と 192x192 / 512x512 PNG アイコンの追加

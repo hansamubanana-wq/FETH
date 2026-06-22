@@ -708,6 +708,63 @@ button.ghost {
     font-weight: 700;
 }
 
+.ability-live-box {
+    flex-basis: 260px;
+}
+
+.live-abilities {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.ability-log {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 9px;
+    background: rgba(15, 26, 43, 0.55);
+    font-size: 0.9rem;
+}
+
+.ability-log.active {
+    background: rgba(255, 152, 0, 0.18);
+    box-shadow: 0 0 0 1px rgba(255, 204, 51, 0.35) inset;
+}
+
+.ability-log.miss {
+    opacity: 0.58;
+}
+
+.ability-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #101820;
+    font-weight: 900;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+}
+
+.ability-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 800;
+}
+
+.ability-state {
+    color: var(--accent);
+    font-weight: 800;
+    font-size: 0.78rem;
+}
+
 #track {
     width: 100%;
     height: 100%;

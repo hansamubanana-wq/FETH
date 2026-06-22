@@ -348,9 +348,9 @@ export class Race3DRenderer {
             this.root.add(numberPlate);
 
             const boostLabel = new THREE.Mesh(
-                new THREE.PlaneGeometry(9, 2.8),
+                new THREE.PlaneGeometry(9.4, 2.85),
                 new THREE.MeshBasicMaterial({
-                    map: this._makeAbilityTexture(this.data.abLabel[i] || "SPECIAL"),
+                    map: this._makeAbilityTexture(this.data.abLabel[i] || "SPECIAL", horse.id + 1, horse.color),
                     transparent: true,
                     side: THREE.DoubleSide,
                     depthTest: false,
@@ -424,7 +424,7 @@ export class Race3DRenderer {
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = "#101820";
-        ctx.font = "900 96px system-ui, sans-serif";
+        ctx.font = "900 112px system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(String(number), 128, 86);
@@ -434,28 +434,42 @@ export class Race3DRenderer {
         return texture;
     }
 
-    _makeAbilityTexture(label) {
+    _makeAbilityTexture(label, number, color) {
         const canvas = document.createElement("canvas");
-        canvas.width = 768;
-        canvas.height = 220;
+        canvas.width = 960;
+        canvas.height = 280;
         const ctx = canvas.getContext("2d");
         const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        gradient.addColorStop(0, "rgba(255, 112, 24, 0.96)");
-        gradient.addColorStop(1, "rgba(255, 214, 64, 0.96)");
+        gradient.addColorStop(0, "rgba(255, 112, 24, 0.98)");
+        gradient.addColorStop(1, "rgba(255, 214, 64, 0.98)");
         ctx.fillStyle = gradient;
         ctx.strokeStyle = "rgba(64, 24, 0, 0.88)";
-        ctx.lineWidth = 14;
-        ctx.roundRect(20, 24, 728, 150, 40);
+        ctx.lineWidth = 16;
+        ctx.roundRect(24, 32, 912, 178, 46);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.arc(118, 121, 62, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = "#ffffff";
         ctx.strokeStyle = "rgba(64, 24, 0, 0.9)";
-        ctx.lineWidth = 9;
-        ctx.font = "900 92px system-ui, sans-serif";
+        ctx.lineWidth = 10;
+        ctx.font = "900 88px system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.strokeText(`⚡${label} 発動！`, 384, 104);
-        ctx.fillText(`⚡${label} 発動！`, 384, 104);
+        ctx.strokeText(String(number), 118, 123);
+        ctx.fillText(String(number), 118, 123);
+        ctx.textAlign = "left";
+        ctx.font = "900 76px system-ui, sans-serif";
+        ctx.strokeText(label, 210, 121);
+        ctx.fillText(label, 210, 121);
+        ctx.font = "800 34px system-ui, sans-serif";
+        ctx.fillStyle = "rgba(64, 24, 0, 0.82)";
+        ctx.fillText("SPECIAL ABILITY", 214, 172);
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = 4;
