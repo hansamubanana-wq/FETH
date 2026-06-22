@@ -11,7 +11,8 @@ import { makeRng } from "./rng.js";
 import { mergeNames, pickNames, addName, setRemoteAdder, customCount } from "./names.js";
 
 const FB_VER = "10.12.2";
-const RESULT_WAIT_MS = 2 * 60 * 1000;
+const RESULT_WAIT_MS = 10 * 1000;     // 結果は10秒で自動的に次レースへ
+const BET_WAIT_MS = 2 * 60 * 1000;    // ベットは2分で締め切り自動スタート
 const REVIVE_BALANCE = 3000;
 const configured = !!firebaseConfig.projectId;
 let fb = null;
@@ -72,6 +73,8 @@ const o = {
     inviteUnsub: null,
     resultTimer: null,
     countdownTimer: null,
+    betTimer: null,
+    betCountdownTimer: null,
     betShownRound: -1, playedRound: -1, finishedRound: -1, settledRound: -1, raceStartedRound: -1, resultShownRound: -1,
 };
 
@@ -381,6 +384,8 @@ function onLeaveClick() {
 }
 
 function doLeave() {
+    clearResultTimers();
+    clearBetTimers();
     if (o.unsub) { o.unsub(); o.unsub = null; }
     if (fb && o.code) {
         const onlyMe = o.room && Object.keys(o.room.players || {}).filter((id) => id !== uid).length === 0;
@@ -457,8 +462,10 @@ function onRoom(room) {
         case "result": handleResult(room); break;
     }
     if (room.phase !== "result") clearResultTimers();
+    if (room.phase !== "betting") clearBetTimers();
 
-    if (o.isHost && room.phase === "betting" && allBet(room)) hostStartRace(room);
+    // ベットは「全員OK」か「2分経過」で自動スタート
+    if (o.isHost && room.phase === "betting") scheduleBetAdvance(room);
     // ホスト交代などで精算が漏れないよう、ここでも試みる
     if (room.phase === "race") trySettle();
 }
@@ -512,6 +519,7 @@ function hostStartBetting() {
         raceSeed: 0,
         names: pickNames(NUM_HORSES),
         resultDeadlineAt: fb.deleteField(),
+        betDeadlineAt: Date.now() + BET_WAIT_MS,
     };
     Object.keys(o.room.players || {}).forEach((id) => {
         updates[`players.${id}.betDone`] = false;
@@ -524,10 +532,10 @@ function hostStartBetting() {
 
 function showWait(room, title) {
     showScreen("screen-wait");
-    document.getElementById("wait-title").textContent = title;
+    o._waitTitle = title;
     renderPlayerList("wait-players", room, (p) => {
-        const base = p.betDone ? "OK" : "waiting";
-        return p.bankrupt ? `BANKRUPT / ${base}` : base;
+        const base = p.betDone ? "OK" : "選択中";
+        return p.bankrupt ? `破産 / ${base}` : base;
     });
 }
 
@@ -535,16 +543,16 @@ function handleBetting(room) {
     const me = room.players[uid];
     if (me.betDone) {
         const noTickets = !me.tickets || me.tickets.length === 0;
-        showWait(room, noTickets ? "Watching until next race" : "Waiting for other players");
+        showWait(room, noTickets ? "次のレースまで観戦中" : "他のプレイヤーを待っています");
+        startBetCountdown();
         return;
     }
-    if (o.betShownRound === room.round || !o.engine) return;
+    if (o.betShownRound === room.round || !o.engine) { startBetCountdown(); return; }
     o.betShownRound = room.round;
 
     document.getElementById("name-wrap").classList.add("hidden");
-    document.getElementById("pick-title").textContent = me.bankrupt
-        ? `${me.name} さんの復活チャレンジ`
-        : `${me.name} さんの賭け`;
+    o._pickTitleBase = me.bankrupt ? `${me.name} さんの復活チャレンジ` : `${me.name} さんの賭け`;
+    document.getElementById("pick-title").textContent = o._pickTitleBase;
     showScreen("screen-pick");
     startBetPanel({
         engine: o.engine,
@@ -555,6 +563,58 @@ function handleBetting(room) {
             [`players.${uid}.betDone`]: true,
         }),
     });
+    startBetCountdown();
+}
+
+// ベット締め切りまでのカウントダウン表示
+function betCountdownText(room) {
+    const dl = room.betDeadlineAt || 0;
+    if (!dl) return "";
+    const remain = Math.max(0, Math.ceil((dl - Date.now()) / 1000));
+    const mm = String(Math.floor(remain / 60)).padStart(2, "0");
+    const ss = String(remain % 60).padStart(2, "0");
+    return `（あと ${mm}:${ss} で自動スタート）`;
+}
+
+function updateBetCountdownUI() {
+    const room = o.room;
+    if (!room || room.phase !== "betting") return;
+    const me = (room.players || {})[uid] || {};
+    const txt = betCountdownText(room);
+    if (me.betDone) {
+        const el = document.getElementById("wait-title");
+        if (el) el.textContent = (o._waitTitle || "") + txt;
+    } else {
+        const el = document.getElementById("pick-title");
+        if (el && o._pickTitleBase) el.textContent = `${o._pickTitleBase}　${txt}`;
+    }
+}
+
+function startBetCountdown() {
+    if (o.betCountdownTimer) clearInterval(o.betCountdownTimer);
+    updateBetCountdownUI();
+    o.betCountdownTimer = setInterval(() => {
+        if (!o.room || o.room.phase !== "betting") { clearBetTimers(); return; }
+        updateBetCountdownUI();
+    }, 1000);
+}
+
+function clearBetTimers() {
+    if (o.betCountdownTimer) { clearInterval(o.betCountdownTimer); o.betCountdownTimer = null; }
+    if (o.betTimer) { clearTimeout(o.betTimer); o.betTimer = null; }
+}
+
+// ホスト：全員OK か 締め切り(2分) で自動的にレース開始
+function scheduleBetAdvance(room) {
+    if (!o.isHost || !room || room.phase !== "betting") return;
+    const deadline = room.betDeadlineAt || 0;
+    if (allBet(room) || (deadline && Date.now() >= deadline)) { hostStartRace(room); return; }
+    if (o.betTimer) clearTimeout(o.betTimer);
+    if (deadline) {
+        o.betTimer = setTimeout(() => {
+            if (o.room && o.room.phase === "betting" && o.room.round === room.round) hostStartRace(o.room);
+        }, Math.max(0, deadline - Date.now() + 250));
+    }
 }
 
 // ---- Race ----
@@ -681,9 +741,7 @@ function markReadyNext() {
 function resultCountdownText(room, readyCount, total) {
     const deadline = room.resultDeadlineAt || (Date.now() + RESULT_WAIT_MS);
     const remain = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-    const mm = String(Math.floor(remain / 60)).padStart(2, "0");
-    const ss = String(remain % 60).padStart(2, "0");
-    return `Next race in ${mm}:${ss} / OK ${readyCount}/${total}`;
+    return `あと ${remain} 秒で次のレースへ（OK ${readyCount}/${total}）`;
 }
 
 function startResultCountdown(room) {
