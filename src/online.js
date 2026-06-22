@@ -741,30 +741,22 @@ function maybeShowResult(room) {
         .map((id) => ({ name: ps[id].name, balance: ps[id].balance, bankrupt: !!ps[id].bankrupt, readyNext: !!ps[id].readyNext }))
         .sort((a, b) => b.balance - a.balance);
 
-    const me = ps[uid] || {};
-    const readyCount = Object.keys(ps).filter((id) => ps[id].readyNext).length;
-    const total = Object.keys(ps).length;
     renderResult(ordered, payoutRows, standings, {
-        primaryLabel: me.readyNext ? "OK済み" : "OK（次のレースへ）",
-        onPrimary: me.readyNext ? null : markReadyNext,
+        primaryLabel: "",
+        onPrimary: null,
         secondaryLabel: "退出する",
         onSecondary: onLeaveClick,
-        note: resultCountdownText(room, readyCount, total),
+        note: resultCountdownText(room),
         gameOver: false,
         bestBets: bestPerType(orderIds, o.engine),
     });
     startResultCountdown(room);
 }
 
-function markReadyNext() {
-    if (!o.code) return;
-    fb.updateDoc(roomDoc(), { [`players.${uid}.readyNext`]: true }).catch(() => {});
-}
-
-function resultCountdownText(room, readyCount, total) {
+function resultCountdownText(room) {
     const deadline = room.resultDeadlineAt || (Date.now() + RESULT_WAIT_MS);
     const remain = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-    return `あと ${remain} 秒で次のレースへ（OK ${readyCount}/${total}）`;
+    return `あと ${remain} 秒で次のレースへ`;
 }
 
 function startResultCountdown(room) {
@@ -776,11 +768,7 @@ function startResultCountdown(room) {
             return;
         }
         const note = document.getElementById("result-note");
-        if (note) {
-            const ps = o.room.players || {};
-            const readyCount = Object.keys(ps).filter((id) => ps[id].readyNext).length;
-            note.textContent = resultCountdownText(o.room, readyCount, Object.keys(ps).length);
-        }
+        if (note) note.textContent = resultCountdownText(o.room);
     }, 1000);
 }
 
@@ -797,11 +785,8 @@ function clearResultTimers() {
 
 function scheduleResultAdvance(room) {
     if (!o.isHost || !room || room.phase !== "result") return;
-    const ps = room.players || {};
-    const ids = Object.keys(ps);
-    const allReady = ids.length > 0 && ids.every((id) => ps[id].readyNext);
     const deadline = room.resultDeadlineAt || 0;
-    if (allReady || (deadline && Date.now() >= deadline)) {
+    if (deadline && Date.now() >= deadline) {
         hostStartBetting();
         return;
     }
