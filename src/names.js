@@ -23,6 +23,15 @@ export function mergeNames(arr) {
 
 export function customCount() { return custom.length; }
 
+export function removeName(name) {
+    const s = clean(name);
+    if (!s) return false;
+    const before = custom.length;
+    custom = custom.filter((n) => n !== s);
+    if (custom.length !== before) save();
+    return custom.length !== before;
+}
+
 // 名前を登録（ローカル保存＋サーバー保存）
 export function addName(name) {
     const s = clean(name);

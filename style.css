@@ -873,6 +873,42 @@ button.ghost {
     font-size: 0.86rem;
 }
 
+.name-list {
+    margin-top: 10px;
+    display: grid;
+    gap: 6px;
+    max-height: 190px;
+    overflow: auto;
+}
+
+.name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 9px;
+    border-radius: 9px;
+    background: var(--bg2);
+}
+
+.name-row span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9rem;
+}
+
+.name-row button {
+    flex: 0 0 auto;
+    border: 1px solid rgba(255, 138, 128, 0.55);
+    border-radius: 8px;
+    background: rgba(179, 65, 58, 0.22);
+    color: #ffb1aa;
+    padding: 5px 9px;
+    cursor: pointer;
+}
+
 .code-box {
     text-align: center;
     font-size: 1.2rem;
