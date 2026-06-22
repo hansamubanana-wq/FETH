@@ -35,6 +35,27 @@ body {
     position: relative;
 }
 
+.update-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding: 12px 16px;
+    text-align: center;
+    font-weight: 800;
+    color: #2a1d00;
+    background: linear-gradient(90deg, #ffd24a, #ffb300);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    animation: updatePulse 1.4s ease-in-out infinite;
+}
+
+@keyframes updatePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.78; }
+}
+
 .version-badge {
     position: fixed;
     right: max(10px, env(safe-area-inset-right));

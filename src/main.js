@@ -2,7 +2,8 @@
 import { showScreen } from "./ui.js";
 import { initBetUI } from "./betui.js";
 import { initLocal, enterLocalSetup } from "./local.js";
-import { initOnline, enterOnlineHome, reconnectIfPossible, inRoom, requestLeave, preloadNames } from "./online.js";
+import { initOnline, enterOnlineHome, reconnectIfPossible, inRoom, requestLeave, preloadNames, checkVersion } from "./online.js";
+import { APP_VERSION } from "./version.js";
 import { ABILITIES, STYLES } from "./horses.js";
 import { buildBetTypes } from "./bets.js";
 import { PLACE_N } from "./engine.js";
@@ -47,6 +48,13 @@ document.querySelectorAll("[data-exit]").forEach((b) =>
     }));
 document.getElementById("online-create-open").addEventListener("click", () => showScreen("screen-create"));
 document.getElementById("online-join-open").addEventListener("click", () => showScreen("screen-join"));
+
+// バージョン表示とアップデート検知
+const badge = document.querySelector(".version-badge");
+if (badge) badge.textContent = "v" + APP_VERSION;
+const updateBanner = document.getElementById("update-banner");
+if (updateBanner) updateBanner.addEventListener("click", () => location.reload());
+checkVersion(() => { if (updateBanner) updateBanner.classList.remove("hidden"); });
 
 // 馬名の共有プールをバックグラウンドで取得（ローカルでも使えるように）
 preloadNames();

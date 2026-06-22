@@ -9,6 +9,7 @@ import { showScreen, randomSeed } from "./ui.js";
 import { simulateRaceData } from "./race.js";
 import { makeRng } from "./rng.js";
 import { mergeNames, pickNames, addName, setRemoteAdder, customCount } from "./names.js";
+import { APP_VERSION, APP_BUILD } from "./version.js";
 
 const FB_VER = "10.12.2";
 const RESULT_WAIT_MS = 10 * 1000;     // 結果は10秒で自動的に次レースへ
@@ -183,6 +184,28 @@ async function syncProfile() {
 function updateNameCount() {
     const el = document.getElementById("horse-name-count");
     if (el) el.textContent = `登録済み ${customCount()} 件`;
+}
+
+// バージョン更新の検知。自分より新しいビルドがサーバーにあれば onOutdated を呼ぶ。
+// 自分が最新なら meta/version を自分のビルドに更新する。
+export async function checkVersion(onOutdated) {
+    if (!configured) return;
+    try {
+        await ensureDb();
+        const ref = fb.doc(fb.db, "meta", "version");
+        const snap = await fb.getDoc(ref);
+        const latest = (snap.exists() && snap.data().build) || 0;
+        if (APP_BUILD > latest) {
+            await fb.setDoc(ref, { build: APP_BUILD, version: APP_VERSION, at: Date.now() }, { merge: true });
+        } else if (latest > APP_BUILD) {
+            onOutdated(latest);
+        }
+        // 以降、誰かが新バージョンをデプロイしたらリアルタイムで検知
+        fb.onSnapshot(ref, (s) => {
+            const b = (s.exists() && s.data().build) || 0;
+            if (b > APP_BUILD) onOutdated(b);
+        });
+    } catch (e) { /* オフライン等は無視 */ }
 }
 
 // サーバーの馬名プールを取得してローカルに統合
