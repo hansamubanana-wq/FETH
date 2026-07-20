@@ -154,7 +154,8 @@ export class Race {
     }
 
     _loop(now) {
-        const elapsed = (now - this._startWall) / 1000;
+        // rAFのタイムスタンプは start() 時点の performance.now() より僅かに過去のことがある
+        const elapsed = Math.max(0, (now - this._startWall) / 1000);
         const { frames, dt } = this.data;
         const last = frames.length - 1;
 
