@@ -77,7 +77,12 @@ function updateAmount() {
     document.getElementById("bet-amount").value = cur.amount;
 }
 function renderBalance() {
-    document.getElementById("pick-balance").textContent = cur.reviveMode ? "復活チャレンジ" : remaining();
+    const el = document.getElementById("pick-balance");
+    if (cur.reviveMode) {
+        el.textContent = "復活チャレンジ";
+        return;
+    }
+    rollNumber(el, remaining());
 }
 
 function renderTabs() {
@@ -108,6 +113,22 @@ function meter(label, v, valText = "", cls = "") {
         `<span class="mv">${valText || pct}</span></div>`;
 }
 
+function rollNumber(el, target, duration = 360) {
+    const from = Number(el.dataset.value ?? el.textContent) || 0;
+    const started = performance.now();
+    el.dataset.value = String(target);
+    el.classList.remove("number-roll");
+    void el.offsetWidth;
+    el.classList.add("number-roll");
+    const tick = (now) => {
+        const t = Math.min(1, (now - started) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = Math.round(from + (target - from) * eased).toLocaleString("ja-JP");
+        if (t < 1 && el.dataset.value === String(target)) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+}
+
 function renderHorses() {
     const type = cur.type;
     const grid = document.getElementById("horse-choices");
@@ -115,7 +136,7 @@ function renderHorses() {
     for (const h of cur.engine.horses) {
         const div = document.createElement("div");
         div.className = "horse-pick";
-        div.style.borderColor = h.color;
+        div.style.setProperty("--horse-color", h.color);
 
         // どの賭け式でも各馬にオッズを表示する。
         // 1頭選び（単勝/複勝）はその式のオッズ、複数頭の式は人気の目安として単勝オッズを出す。
@@ -132,13 +153,14 @@ function renderHorses() {
         const s = h.stats;
         div.innerHTML = `
             ${badge}
+            <div class="horse-ribbon" aria-hidden="true"><span>${h.id + 1}</span></div>
             <div class="emoji" style="filter:drop-shadow(0 0 6px ${h.color})">${h.emoji}</div>
             <div class="hname">${h.id + 1}. ${h.name}</div>
             ${oddsLine}
             <div class="meters">
-                ${meter("スピード", s.speed)}
-                ${meter("スタミナ", s.stamina)}
-                ${meter("瞬発力", s.kick)}
+                ${meter("スピード", s.speed, "", "speed")}
+                ${meter("スタミナ", s.stamina, "", "stamina")}
+                ${meter("瞬発力", s.kick, "", "kick")}
             </div>
             <div class="tags">
                 <span class="style" title="${h.style.desc}">${h.style.label}</span>
@@ -185,8 +207,8 @@ function renderSelection() {
         const odds = cur.engine.oddsFor(type.key, cur.selection);
         const payout = cur.reviveMode ? 3000 : Math.floor(cur.amount * odds);
         preview.innerHTML = cur.reviveMode
-            ? `復活成功で <b>${payout}</b> コイン`
-            : `予想オッズ <b>${odds}倍</b> ・ 当たれば <b>${payout}</b> コイン`;
+            ? `復活成功で <b class="number-roll">${payout.toLocaleString("ja-JP")}</b> コイン`
+            : `予想オッズ <b class="number-roll">${odds}倍</b> ・ 当たれば <b class="number-roll">${payout.toLocaleString("ja-JP")}</b> コイン`;
         preview.classList.remove("hidden");
         confirm.classList.remove("hidden");
     } else {

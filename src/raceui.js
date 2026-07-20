@@ -188,7 +188,9 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
     orderedHorses.forEach((h, i) => {
         const li = document.createElement("li");
         if (i === 0) li.classList.add("winner");
+        li.style.setProperty("--result-delay", `${i * 75}ms`);
         li.innerHTML = `
+            ${i === 0 ? '<span class="winner-rays" aria-hidden="true"></span><span class="winner-trophy" aria-label="優勝">🏆</span>' : ""}
             <span class="rank">${medals[i] || i + 1}</span>
             <span class="emoji" style="filter:drop-shadow(0 0 4px ${h.color})">${h.emoji}</span>
             <span>${h.id + 1}. ${h.name} <small style="color:var(--muted)">(${h.style.label}${h.ability ? " ⚡" + h.ability.label : ""})</small></span>
@@ -220,9 +222,10 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
         const rank = medals[i] || `${i + 1}位`;
         const status = p.bankrupt ? " 💸破産中" : "";
         const ready = p.readyNext ? " / OK" : "";
-        li.innerHTML = `<span>${rank} ${p.name}${status}</span><span class="coins">${p.balance} コイン${ready}</span>`;
+        li.innerHTML = `<span>${rank} ${p.name}${status}</span><span class="coins"><span class="coin-value number-roll" data-target="${p.balance}">0</span> コイン${ready}</span>`;
         st.appendChild(li);
     });
+    st.querySelectorAll(".coin-value").forEach((el) => animateCount(el, Number(el.dataset.target)));
 
     // 各賭け式ごとの最適だった買い目
     const bb = document.getElementById("best-bet");
@@ -265,4 +268,14 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
         secondary.classList.add("hidden");
     }
     if (note) note.textContent = buttons.note || "";
+}
+
+function animateCount(el, target, duration = 650) {
+    const started = performance.now();
+    const tick = (now) => {
+        const t = Math.min(1, (now - started) / duration);
+        el.textContent = Math.round(target * (1 - Math.pow(1 - t, 3))).toLocaleString("ja-JP");
+        if (t < 1 && el.isConnected) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
 }
