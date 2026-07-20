@@ -19,11 +19,12 @@ const CAM_POS_SMOOTH = 3.2;    // カメラ位置の追従速度(大きいほど
 const CAM_ZOOM_SMOOTH = 2.2;   // ズームの追従速度
 
 export class Race3DRenderer {
-    constructor(canvas, horses, data, layout) {
+    constructor(canvas, horses, data, layout, onProgress = null) {
         this.canvas = canvas;
         this.horses = horses;
         this.data = data;
         this.layout = layout;
+        this.onProgress = onProgress;
         this.clock = new THREE.Clock();
         this.ready = false;
         this.mixers = [];
@@ -72,7 +73,7 @@ export class Race3DRenderer {
         this.scene.add(this.root);
         this._buildWorld();
         this._buildRaceEffects();
-        this._loadHorseModel();
+        this.readyPromise = this._loadHorseModel();
         this.resize();
     }
 
@@ -854,14 +855,20 @@ export class Race3DRenderer {
     }
 
     async _loadHorseModel() {
+        this.onProgress?.(0.08);
         try {
-            const gltf = await new GLTFLoader().loadAsync(HORSE_MODEL_URL);
+            const gltf = await new Promise((resolve, reject) => {
+                new GLTFLoader().load(HORSE_MODEL_URL, resolve, (event) => {
+                    if (event.total) this.onProgress?.(Math.min(0.92, 0.08 + (event.loaded / event.total) * 0.84));
+                }, reject);
+            });
             this._createHorses(gltf.scene, gltf.animations);
         } catch (error) {
             console.warn("Horse GLB failed to load, using local fallback.", error);
             this._createHorses(this._fallbackHorse(), []);
         }
         this.ready = true;
+        this.onProgress?.(1);
     }
 
     _createHorses(source, animations) {

@@ -45,6 +45,42 @@ body {
     background: var(--bg);
 }
 
+.app-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 14px;
+    color: #ffe9a3;
+    background: radial-gradient(circle at 50% 38%, #263347, #07101d 68%);
+    transition: opacity .45s ease, visibility .45s;
+}
+
+.app-splash.loaded { opacity: 0; visibility: hidden; pointer-events: none; }
+.app-splash img { filter: drop-shadow(0 8px 24px rgba(255, 201, 48, .3)); }
+.gold-spinner { width: 42px; height: 42px; border: 3px solid rgba(255, 211, 77, .2); border-top-color: #ffd34d; border-radius: 50%; animation: goldSpin .8s linear infinite; }
+@keyframes goldSpin { to { transform: rotate(360deg); } }
+
+.race-loading {
+    position: absolute;
+    z-index: 8;
+    left: 50%;
+    top: 50%;
+    width: min(76%, 380px);
+    padding: 18px;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #fff1b0;
+    border: 1px solid rgba(255, 211, 77, .5);
+    border-radius: 14px;
+    background: rgba(5, 13, 23, .9);
+    box-shadow: 0 12px 35px rgba(0,0,0,.5);
+}
+.race-load-track { height: 7px; margin-top: 12px; overflow: hidden; border-radius: 9px; background: rgba(255,255,255,.12); }
+.race-load-track i { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #b9780c, #ffe27a); box-shadow: 0 0 10px #ffd34d; transition: width .18s ease; }
+
 .scene-background {
     position: absolute;
     inset: 0;

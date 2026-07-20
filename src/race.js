@@ -98,7 +98,7 @@ export function simulateRaceData(horses, rng) {
 
 // 事前計算した raceData を canvas に実時間で再生するプレイヤー（オーバルコース1周）。
 export class Race {
-    constructor(canvas, horses, raceData) {
+    constructor(canvas, horses, raceData, onProgress = null) {
         this.canvas = canvas;
         this.horses = horses;
         this.data = raceData;
@@ -136,11 +136,15 @@ export class Race {
                 rx: this.rx,
                 ry: this.ry,
                 off: this.off,
-            });
+            }, onProgress);
         } catch (error) {
             console.warn("3D renderer unavailable, falling back to 2D canvas.", error);
         }
         if (!this.renderer3d) this.ctx = canvas.getContext("2d");
+    }
+
+    whenReady() {
+        return this.renderer3d?.readyPromise || Promise.resolve();
     }
 
     start() {

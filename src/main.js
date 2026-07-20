@@ -9,6 +9,11 @@ import { buildBetTypes } from "./bets.js";
 import { PLACE_N } from "./engine.js";
 import { buildGuideHTML } from "./guide.js";
 
+const dismissSplash = () => document.getElementById("app-splash")?.classList.add("loaded");
+if (document.readyState === "complete") dismissSplash();
+else window.addEventListener("load", dismissSplash, { once: true });
+setTimeout(dismissSplash, 5000);
+
 // ---- ズーム禁止 ----
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("gesturechange", (e) => e.preventDefault());

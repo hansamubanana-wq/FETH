@@ -26,13 +26,23 @@ export function playRace(horses, raceSeed, context = null) {
     setupAbilityLive(horses, raceData);
     setupLive(context);
 
-    const race = new Race(canvas, horses, raceData);
+    const loading = document.getElementById("race-loading");
+    const loadBar = document.getElementById("race-load-bar");
+    const loadPercent = document.getElementById("race-load-percent");
+    loading?.classList.remove("hidden");
+    const race = new Race(canvas, horses, raceData, (progress) => {
+        const percent = Math.round(progress * 100);
+        if (loadBar) loadBar.style.width = `${percent}%`;
+        if (loadPercent) loadPercent.textContent = `${percent}%`;
+    });
     race._draw(0);
 
     return new Promise((resolve) => {
-        let c = 3;
-        status.textContent = c;
-        const timer = setInterval(() => {
+        race.whenReady().finally(() => {
+            loading?.classList.add("hidden");
+            let c = 3;
+            status.textContent = c;
+            const timer = setInterval(() => {
             c--;
             if (c > 0) { status.textContent = c; return; }
             clearInterval(timer);
@@ -57,7 +67,8 @@ export function playRace(horses, raceSeed, context = null) {
                     setTimeout(() => resolve(ordered), 1300);
             };
             race.start();
-        }, 700);
+            }, 700);
+        });
     });
 }
 
