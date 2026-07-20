@@ -9,6 +9,15 @@ const CENTER_RX_SCALE = 0.13;
 const CENTER_RZ_SCALE = 0.16;
 const LANE_SPREAD = 0.13;
 
+// 動的カメラの設定
+const FULL_VIEW_HEIGHT = 64;   // コース全体が収まる視野の高さ(=最大ズームアウト)
+const MIN_VIEW_HEIGHT = 34;    // 馬群が密集しているときの最大ズームイン
+const VIEW_MARGIN_X = 9;       // 画面左右の余白(ワールド単位)。アビリティ表示の横幅も考慮
+const VIEW_MARGIN_Y = 4;       // 画面上下の余白(ワールド単位)
+const LABEL_HEADROOM = 15;     // 馬番プレート・アビリティ表示ぶんの頭上余白
+const CAM_POS_SMOOTH = 3.2;    // カメラ位置の追従速度(大きいほど機敏)
+const CAM_ZOOM_SMOOTH = 2.2;   // ズームの追従速度
+
 export class Race3DRenderer {
     constructor(canvas, horses, data, layout) {
         this.canvas = canvas;
@@ -28,7 +37,11 @@ export class Race3DRenderer {
         this.scene.fog = new THREE.Fog(0x8cc3e3, 90, 230);
 
         this.camera = new THREE.OrthographicCamera(-62, 62, 35, -35, 0.1, 300);
-        this.camera.position.set(0, 52, 72);
+        this.cameraOffset = new THREE.Vector3(0, 52, 72);
+        this.viewTarget = new THREE.Vector3(0, 0, 0);
+        this.viewHeight = FULL_VIEW_HEIGHT;
+        this.aspect = 16 / 9;
+        this.camera.position.copy(this.cameraOffset);
         this.camera.up.set(0, 0, -1);
         this.camera.lookAt(0, 0, 0);
 
@@ -55,19 +68,72 @@ export class Race3DRenderer {
         const width = Math.max(320, Math.floor(rect.width || this.canvas.clientWidth || 960));
         const height = Math.max(240, Math.floor(width * 0.5625));
         this.renderer.setSize(width, height, false);
-        const frustumHeight = 64; // 外レーンの馬がギリギリ収まるまでズーム
-        const frustumWidth = frustumHeight * (width / height);
+        this.aspect = width / height;
+        this._applyFrustum();
+    }
+
+    _applyFrustum() {
+        const frustumWidth = this.viewHeight * this.aspect;
         this.camera.left = -frustumWidth / 2;
         this.camera.right = frustumWidth / 2;
-        this.camera.top = frustumHeight / 2;
-        this.camera.bottom = -frustumHeight / 2;
+        this.camera.top = this.viewHeight / 2;
+        this.camera.bottom = -this.viewHeight / 2;
         this.camera.updateProjectionMatrix();
+    }
+
+    // 全馬(=1位から最下位まで)が必ず画面に収まるようにカメラの注視点とズームを更新する
+    _updateCamera(distances, dt) {
+        if (!distances || !distances.length) return;
+
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
+
+        let minR = Infinity, maxR = -Infinity, minU = Infinity, maxU = -Infinity;
+        const point = new THREE.Vector3();
+        for (let i = 0; i < distances.length; i++) {
+            const pose = this._pose(distances[i], this.layout.off[i]);
+            // 足元と、頭上のプレート表示ぶんの2点をスクリーン軸に投影して範囲を取る
+            for (const headY of [0, LABEL_HEADROOM]) {
+                point.copy(pose.position);
+                point.y += headY;
+                const r = point.dot(right);
+                const u = point.dot(up);
+                if (r < minR) minR = r;
+                if (r > maxR) maxR = r;
+                if (u < minU) minU = u;
+                if (u > maxU) maxU = u;
+            }
+        }
+        if (!Number.isFinite(minR)) return;
+
+        const needWidth = (maxR - minR) + VIEW_MARGIN_X * 2;
+        const needHeight = (maxU - minU) + VIEW_MARGIN_Y * 2;
+        const desiredHeight = Math.min(
+            FULL_VIEW_HEIGHT,
+            Math.max(MIN_VIEW_HEIGHT, needHeight, needWidth / this.aspect)
+        );
+
+        // 馬群の中心をスクリーン軸上の中点から復元(視線方向の成分は写りに影響しない)
+        const desiredTarget = new THREE.Vector3()
+            .addScaledVector(right, (minR + maxR) / 2)
+            .addScaledVector(up, (minU + maxU) / 2);
+
+        const posK = 1 - Math.exp(-CAM_POS_SMOOTH * dt);
+        const zoomK = 1 - Math.exp(-CAM_ZOOM_SMOOTH * dt);
+        this.viewTarget.lerp(desiredTarget, posK);
+        this.viewHeight += (desiredHeight - this.viewHeight) * zoomK;
+
+        this.camera.position.copy(this.viewTarget).add(this.cameraOffset);
+        this.camera.up.set(0, 0, -1);
+        this.camera.lookAt(this.viewTarget);
+        this._applyFrustum();
     }
 
     render(distances, elapsed = 0) {
         this.resize();
         const dt = Math.min(0.05, this.clock.getDelta());
         for (const mixer of this.mixers) mixer.update(dt * 1.9);
+        this._updateCamera(distances, dt);
 
         const leader = distances
             .map((d, i) => ({ d, i }))
