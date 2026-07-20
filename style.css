@@ -142,7 +142,8 @@ body[data-scene="stadium"] { --scene-stadium-opacity: 1; }
 
 .screen {
     display: none;
-    animation: fade 0.25s ease;
+    transform-origin: 50% 35%;
+    animation: fade 0.25s cubic-bezier(.2, .75, .3, 1);
 }
 
 .screen.active {
@@ -292,7 +293,7 @@ body[data-scene="stadium"] { --scene-stadium-opacity: 1; }
 @keyframes fade {
     from {
         opacity: 0;
-        transform: translateY(8px);
+        transform: translateY(5px) scale(0.985);
     }
 
     to {
@@ -529,6 +530,10 @@ button.ghost:active {
 }
 
 .bettype-tabs button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 8px 14px;
     border-radius: 999px;
     border: 1px solid var(--muted);
@@ -536,14 +541,29 @@ button.ghost:active {
     color: var(--text);
     cursor: pointer;
     font-size: 0.95rem;
+    transition: color .18s, border-color .18s, background .18s, transform .18s;
 }
 
 .bettype-tabs button.active {
-    background: var(--accent);
-    color: #2a1d00;
+    background: linear-gradient(180deg, rgba(255, 215, 92, 0.18), rgba(255, 204, 51, 0.03));
+    color: #ffe99c;
     border-color: var(--accent);
     font-weight: 700;
 }
+
+.bettype-tabs button.active::after {
+    content: "";
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: -1px;
+    height: 3px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, transparent, #ffe378 25% 75%, transparent);
+    box-shadow: 0 0 10px rgba(255, 211, 77, 0.7);
+}
+
+.bettype-icon { color: #f7c84b; font-size: .82em; filter: drop-shadow(0 0 4px rgba(255, 204, 51, .45)); }
 
 .bettype-desc {
     color: var(--muted);
@@ -774,6 +794,22 @@ button.ghost:active {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
+
+.balance-bar::before,
+.standings .coins::before {
+    content: "";
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: .32em;
+    vertical-align: -.13em;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 28%, #fff6b1 0 8%, #ffd34d 9% 45%, #c9810e 46% 66%, #ffe47d 67% 76%, #a85e00 77%);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 2px 5px rgba(0,0,0,.4);
+}
+
+.coin-bounce { animation: coinBounce .42s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes coinBounce { 50% { transform: translateY(-5px) scale(1.08); filter: brightness(1.25); } }
 
 .horse-pick::after {
     content: "";
@@ -1623,6 +1659,16 @@ code {
 }
 
 /* 賭け方のコツ */
+#screen-guide {
+    min-height: calc(100svh - 72px);
+    padding-bottom: 36px;
+    background: radial-gradient(circle at 50% 4%, rgba(255, 207, 70, .11), transparent 36%);
+}
+
+#screen-guide > h2 {
+    text-shadow: 0 3px 18px rgba(255, 200, 60, .34);
+}
+
 .guide {
     max-width: 640px;
     margin: 0 auto;
@@ -1631,10 +1677,12 @@ code {
 }
 
 .guide-sec {
-    background: var(--panel);
-    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(34, 48, 66, .96), rgba(12, 22, 35, .96));
+    border: 1px solid rgba(229, 190, 91, .34);
+    border-radius: 16px;
     padding: 14px 18px;
     margin-bottom: 12px;
+    box-shadow: 0 12px 28px rgba(0,0,0,.23), inset 0 1px 0 rgba(255,255,255,.05);
 }
 
 .guide-sec h3 {

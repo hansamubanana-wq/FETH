@@ -82,16 +82,24 @@ function renderBalance() {
         el.textContent = "復活チャレンジ";
         return;
     }
+    const previous = Number(el.dataset.value ?? el.textContent) || 0;
     rollNumber(el, remaining());
+    if (previous !== remaining()) {
+        const bar = el.closest(".balance-bar");
+        bar?.classList.remove("coin-bounce");
+        void bar?.offsetWidth;
+        bar?.classList.add("coin-bounce");
+    }
 }
 
 function renderTabs() {
     const tabs = document.getElementById("bettype-tabs");
     tabs.innerHTML = "";
     const types = cur.reviveMode ? cur.engine.betTypes.filter((t) => t.key === "win") : cur.engine.betTypes;
+    const icons = { win: "◆", place: "●", quinella: "◎", exacta: "➜", trio: "△", trifecta: "♛", wide: "◇" };
     for (const t of types) {
         const btn = document.createElement("button");
-        btn.textContent = t.label;
+        btn.innerHTML = `<span class="bettype-icon" aria-hidden="true">${icons[t.key] || "◇"}</span><span>${t.label}</span>`;
         btn.className = t === cur.type ? "active" : "";
         btn.addEventListener("click", () => {
             cur.type = t; cur.selection = [];
