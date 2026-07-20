@@ -3,7 +3,6 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
 const HORSE_MODEL_URL = "https://threejs.org/examples/models/gltf/Horse.glb";
-const GRASS_TEXTURE_URL = "https://threejs.org/examples/textures/terrain/grasslight-big.jpg";
 const TRACK_LEN = 820;
 const CENTER_RX_SCALE = 0.13;
 const CENTER_RZ_SCALE = 0.16;
@@ -36,6 +35,7 @@ export class Race3DRenderer {
         this.scene.background = new THREE.Color(0x8cc3e3);
         this.scene.fog = new THREE.Fog(0xa9d4ea, 110, 260);
         this.clouds = [];
+        this.flags = [];
         this.confetti = null;
         this.confettiLaunched = false;
         this.finishedAt = new Array(horses.length).fill(null); // ゴール後の流し走行用
@@ -56,8 +56,9 @@ export class Race3DRenderer {
             alpha: false,
             powerPreference: "high-performance",
         });
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        this.renderer.shadowMap.enabled = true;
+        this.isMobile = matchMedia("(max-width: 760px), (pointer: coarse)").matches;
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2));
+        this.renderer.shadowMap.enabled = !this.isMobile;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -144,6 +145,11 @@ export class Race3DRenderer {
             cloud.position.x += cloud.userData.speed * dt;
             if (cloud.position.x > 130) cloud.position.x = -130;
         }
+        for (const flag of this.flags) {
+            const wave = Math.sin(elapsed * 4.2 + flag.userData.phase);
+            flag.rotation.y = flag.userData.baseYaw + wave * 0.18;
+            flag.scale.x = 0.92 + wave * 0.08;
+        }
 
         // 1着馬のゴールで紙吹雪
         if (!this.confettiLaunched && distances.some((d) => d >= TRACK_LEN - 0.5)) {
@@ -214,13 +220,14 @@ export class Race3DRenderer {
     }
 
     _buildWorld() {
-        const hemi = new THREE.HemisphereLight(0xeaf6ff, 0x33552d, 2.4);
+        const hemi = new THREE.HemisphereLight(0xfff3d6, 0x27452b, 2.1);
         this.scene.add(hemi);
 
         const sun = new THREE.DirectionalLight(0xffffff, 2.6);
         sun.position.set(-46, 88, 42);
         sun.castShadow = true;
-        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.mapSize.set(this.isMobile ? 512 : 2048, this.isMobile ? 512 : 2048);
+        sun.shadow.bias = -0.0003;
         sun.shadow.camera.left = -90;
         sun.shadow.camera.right = 90;
         sun.shadow.camera.top = 90;
@@ -231,14 +238,13 @@ export class Race3DRenderer {
             new THREE.PlaneGeometry(220, 150, 1, 1),
             new THREE.MeshStandardMaterial({
                 color: 0x2d8a3b,
-                map: this._createFallbackGrassTexture(),
+                map: this._createGrassTexture(),
                 roughness: 0.94,
             })
         );
         turf.rotation.x = -Math.PI / 2;
         turf.receiveShadow = true;
         this.root.add(turf);
-        this._loadGrassTexture(turf.material);
 
         this._addSky();
         this._addTrack();
@@ -373,34 +379,15 @@ export class Race3DRenderer {
         return texture;
     }
 
-    _loadGrassTexture(material) {
-        new THREE.TextureLoader().load(
-            GRASS_TEXTURE_URL,
-            (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(4, 3);
-                texture.colorSpace = THREE.SRGBColorSpace;
-                texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
-                material.map = texture;
-                material.color.set(0x2f8f3d);
-                material.needsUpdate = true;
-            },
-            undefined,
-            () => {
-                material.map = this._createFallbackGrassTexture();
-                material.needsUpdate = true;
-            }
-        );
-    }
-
-    _createFallbackGrassTexture() {
+    _createGrassTexture() {
         const canvas = document.createElement("canvas");
         canvas.width = 256;
         canvas.height = 256;
         const ctx = canvas.getContext("2d");
-        ctx.fillStyle = "#287d35";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (let x = 0; x < canvas.width; x += 32) {
+            ctx.fillStyle = (x / 32) % 2 ? "#236d30" : "#2d8138";
+            ctx.fillRect(x, 0, 32, canvas.height);
+        }
         for (let i = 0; i < 3600; i++) {
             const x = Math.random() * canvas.width;
             const y = Math.random() * canvas.height;
@@ -417,7 +404,7 @@ export class Race3DRenderer {
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(4, 3);
+        texture.repeat.set(5, 4);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
         return texture;
@@ -425,7 +412,7 @@ export class Race3DRenderer {
 
     _addRails() {
         const { edge } = this._laneMetrics();
-        const railMat = new THREE.MeshStandardMaterial({ color: 0xf4f4ef, roughness: 0.4 });
+        const railMat = new THREE.MeshStandardMaterial({ color: 0xf7f5ea, roughness: 0.28, metalness: 0.08 });
         [-edge, edge].forEach((offset) => {
             const curve = new THREE.CatmullRomCurve3(this._ovalPoints(offset, 260), true);
             const rail = new THREE.Mesh(new THREE.TubeGeometry(curve, 260, 0.12, 8, true), railMat);
@@ -473,10 +460,10 @@ export class Race3DRenderer {
         }
 
         // トラック側へ下る段々のひな壇と、そこを埋めるカラフルな観客
-        const rows = 5;
+        const rows = 6;
         const stepMat = new THREE.MeshStandardMaterial({ color: 0x3a5069, roughness: 0.8 });
         const crowdGeo = new THREE.BoxGeometry(0.55, 0.85, 0.42);
-        const perRow = 40;
+        const perRow = 56;
         const crowd = new THREE.InstancedMesh(
             crowdGeo,
             new THREE.MeshStandardMaterial({ roughness: 0.85 }),
@@ -496,7 +483,7 @@ export class Race3DRenderer {
             step.castShadow = true;
             this.root.add(step);
             for (let c = 0; c < perRow; c++) {
-                if (Math.random() < 0.12) continue; // 空席をつくる
+                if (Math.random() < 0.06) continue; // 少量だけ空席をつくる
                 dummy.position.set(
                     -34 + (c / (perRow - 1)) * 52 + (Math.random() - 0.5) * 0.5,
                     stepY + 0.42,
@@ -681,13 +668,17 @@ export class Race3DRenderer {
             flag.position.copy(p.position);
             flag.position.x += 0.85;
             flag.position.y = 3.05;
+            flag.userData.phase = i * 0.83;
+            flag.userData.baseYaw = p.yaw;
+            flag.rotation.y = p.yaw;
+            this.flags.push(flag);
             this.root.add(flag);
         }
     }
 
     // 1着馬がゴールした瞬間に紙吹雪を舞わせる
     _spawnConfetti() {
-        const count = 240;
+        const count = this.isMobile ? 260 : 420;
         const rzC = this.layout.ry * CENTER_RZ_SCALE;
         const geo = new THREE.PlaneGeometry(0.6, 0.85);
         const mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), count);
@@ -700,7 +691,8 @@ export class Race3DRenderer {
                 rot: new THREE.Euler(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI),
                 spin: 4 + Math.random() * 8,
             });
-            color.setHSL(Math.random(), 0.85, 0.6);
+            const palette = [0xffd54f, 0xffffff, 0xe53935, 0x29b6f6, 0x66bb6a, 0xab47bc];
+            color.setHex(palette[i % palette.length]);
             mesh.setColorAt(i, color);
         }
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -757,7 +749,9 @@ export class Race3DRenderer {
                 if (obj.material) {
                     obj.material = obj.material.clone();
                     obj.material.color.copy(new THREE.Color(horse.color));
-                    obj.material.roughness = 0.72;
+                    obj.material.roughness = 0.48;
+                    obj.material.metalness = 0.04;
+                    obj.material.envMapIntensity = 0.7;
                 }
             });
             group.add(model);
@@ -822,17 +816,31 @@ export class Race3DRenderer {
 
     _fallbackHorse() {
         const group = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(3, 1.1, 0.9), new THREE.MeshStandardMaterial({ color: 0x6f4528 }));
+        const coat = new THREE.MeshStandardMaterial({ color: 0x6f4528, roughness: 0.58 });
+        const dark = new THREE.MeshStandardMaterial({ color: 0x2b1911, roughness: 0.72 });
+        const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.72, 1.8, 6, 12), coat);
         body.position.y = 1.3;
+        body.rotation.z = Math.PI / 2;
         group.add(body);
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.75, 0.7), new THREE.MeshStandardMaterial({ color: 0x5f371f }));
-        head.position.set(1.75, 1.55, 0);
+        const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1.05, 5, 10), coat);
+        neck.position.set(1.18, 1.75, 0);
+        neck.rotation.z = -0.55;
+        group.add(neck);
+        const head = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.72, 5, 10), coat);
+        head.position.set(1.78, 2.15, 0);
+        head.rotation.z = Math.PI / 2;
         group.add(head);
-        for (const x of [-1, -0.2, 0.7, 1.35]) {
-            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.12, 1.15, 8), new THREE.MeshStandardMaterial({ color: 0x3a2316 }));
-            leg.position.set(x, 0.55, x % 0.4 ? -0.32 : 0.32);
+        for (const [x, z, tilt] of [[-0.9, -0.38, 0.2], [-0.55, 0.38, -0.25], [0.72, -0.38, -0.22], [0.98, 0.38, 0.3]]) {
+            const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.86, 4, 7), dark);
+            leg.position.set(x, 0.5, z);
+            leg.rotation.z = tilt;
             group.add(leg);
         }
+        const tail = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.5, 8), dark);
+        tail.position.set(-1.75, 1.25, 0);
+        tail.rotation.z = Math.PI / 2 + 0.4;
+        group.add(tail);
+        group.traverse((obj) => { if (obj.isMesh) obj.castShadow = obj.receiveShadow = true; });
         return group;
     }
 
