@@ -30,6 +30,8 @@ export class Race3DRenderer {
         this.numberPlates = [];
         this.boostLabels = [];
         this.boostRings = [];
+        // 事前計算済みレースデータから決めるため、同じレースは全端末で同じ空になる。
+        this.skyTheme = Math.floor(data.finishTime.reduce((sum, value) => sum + value, 0) * 1000) % 3;
 
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x8cc3e3);
@@ -220,10 +222,11 @@ export class Race3DRenderer {
     }
 
     _buildWorld() {
-        const hemi = new THREE.HemisphereLight(0xfff3d6, 0x27452b, 2.1);
+        const evening = this.skyTheme > 0;
+        const hemi = new THREE.HemisphereLight(evening ? 0xffd0a6 : 0xfff3d6, evening ? 0x172d32 : 0x27452b, evening ? 1.75 : 2.1);
         this.scene.add(hemi);
 
-        const sun = new THREE.DirectionalLight(0xffffff, 2.6);
+        const sun = new THREE.DirectionalLight(evening ? 0xffb06a : 0xffffff, evening ? 2.25 : 2.6);
         sun.position.set(-46, 88, 42);
         sun.castShadow = true;
         sun.shadow.mapSize.set(this.isMobile ? 512 : 2048, this.isMobile ? 512 : 2048);
@@ -271,9 +274,15 @@ export class Race3DRenderer {
         canvas.height = 512;
         const ctx = canvas.getContext("2d");
         const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        g.addColorStop(0, "#3d8ed3");
-        g.addColorStop(0.5, "#8cc3e3");
-        g.addColorStop(1, "#e3f2f9");
+        const palettes = [
+            ["#3d8ed3", "#8cc3e3", "#e3f2f9"],
+            ["#182d55", "#8a5a74", "#f5b06a"],
+            ["#101b38", "#5a456c", "#e78c5d"],
+        ];
+        const palette = palettes[this.skyTheme];
+        g.addColorStop(0, palette[0]);
+        g.addColorStop(0.52, palette[1]);
+        g.addColorStop(1, palette[2]);
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         const tex = new THREE.CanvasTexture(canvas);
@@ -286,7 +295,7 @@ export class Race3DRenderer {
             const mat = new THREE.SpriteMaterial({
                 map: cloudTex,
                 transparent: true,
-                opacity: 0.7 + Math.random() * 0.2,
+                opacity: (this.skyTheme ? 0.42 : 0.7) + Math.random() * 0.2,
                 depthWrite: false,
                 fog: false,
             });
@@ -509,8 +518,8 @@ export class Race3DRenderer {
         const rzC = this.layout.ry * CENTER_RZ_SCALE;
         const zI = rzC - edge * LANE_SPREAD;
         const zO = rzC + edge * LANE_SPREAD;
-        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.38 });
-        const red = new THREE.MeshStandardMaterial({ color: 0xd8392b, roughness: 0.5 });
+        const mat = new THREE.MeshStandardMaterial({ color: 0xf4ead0, roughness: 0.2, metalness: 0.48 });
+        const red = new THREE.MeshStandardMaterial({ color: 0xa71616, roughness: 0.25, metalness: 0.35, emissive: 0x2c0303 });
 
         [zI - 1.3, zO + 1.3].forEach((pz) => {
             const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 8.5, 12), mat);
@@ -523,6 +532,33 @@ export class Race3DRenderer {
         bar.position.set(0, 8.8, (zI + zO) / 2);
         bar.castShadow = true;
         this.root.add(bar);
+
+        // ゴール上の電光掲示板。CanvasTextureで発光文字と金属フレームを作る。
+        const boardCanvas = document.createElement("canvas");
+        boardCanvas.width = 512;
+        boardCanvas.height = 128;
+        const bctx = boardCanvas.getContext("2d");
+        bctx.fillStyle = "#080b10";
+        bctx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
+        bctx.strokeStyle = "#d8aa3f";
+        bctx.lineWidth = 12;
+        bctx.strokeRect(6, 6, 500, 116);
+        bctx.fillStyle = "#ffd85a";
+        bctx.shadowColor = "#ff9d00";
+        bctx.shadowBlur = 22;
+        bctx.font = "900 62px Arial";
+        bctx.textAlign = "center";
+        bctx.textBaseline = "middle";
+        bctx.fillText("FINISH", 256, 66);
+        const boardTex = new THREE.CanvasTexture(boardCanvas);
+        boardTex.colorSpace = THREE.SRGBColorSpace;
+        const board = new THREE.Mesh(
+            new THREE.PlaneGeometry(13, 3.25),
+            new THREE.MeshStandardMaterial({ map: boardTex, emissiveMap: boardTex, emissive: 0x5a3100, roughness: 0.28, metalness: 0.32, side: THREE.DoubleSide })
+        );
+        board.rotation.y = Math.PI / 2;
+        board.position.set(0, 11.1, (zI + zO) / 2);
+        this.root.add(board);
 
         // ゲートの下に連なる三角フラッグ(カメラ側を向ける)
         const flagColors = [0xffd34d, 0xff7043, 0x4fc3f7, 0x81c784, 0xf06292];
