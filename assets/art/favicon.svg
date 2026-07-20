@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="みんなで競馬">
+  <defs>
+    <linearGradient id="g" x1="10" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff0a8"/>
+      <stop offset=".48" stop-color="#dba92e"/>
+      <stop offset="1" stop-color="#8e5804"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="#080a0d"/>
+  <path d="M12 12c-8 17-2 37 16 45l4-8C18 43 14 29 20 16l-8-4Zm40 0c8 17 2 37-16 45l-4-8c14-6 18-20 12-33l8-4Z" fill="url(#g)"/>
+  <path d="M23 44c-2-10 2-22 10-27l4-7 5 8-4 4c7 5 8 13 2 18-4 4-11 6-17 4Zm13-15 7-2-3 6-4-4Z" fill="url(#g)"/>
+  <path d="m32 4 2.2 4.5 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7L32 4Z" fill="#f7d66a"/>
+</svg>
