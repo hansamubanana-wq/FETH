@@ -7,6 +7,7 @@ const TRACK_LEN = 820;
 const CENTER_RX_SCALE = 0.13;
 const CENTER_RZ_SCALE = 0.16;
 const LANE_SPREAD = 0.13;
+const COAT_COLORS = [0x8b3f24, 0x5a321f, 0x3b2a24, 0xb9783f, 0x6d5141, 0xd8c8aa, 0x9b4f2e, 0x24211f];
 
 // 動的カメラの設定
 const FULL_VIEW_HEIGHT = 64;   // コース全体が収まる視野の高さ(=最大ズームアウト)
@@ -30,6 +31,9 @@ export class Race3DRenderer {
         this.numberPlates = [];
         this.boostLabels = [];
         this.boostRings = [];
+        this.sprayCursor = 0;
+        this.sprayAccumulator = 0;
+        this.flashClock = 0;
         // 事前計算済みレースデータから決めるため、同じレースは全端末で同じ空になる。
         this.skyTheme = Math.floor(data.finishTime.reduce((sum, value) => sum + value, 0) * 1000) % 3;
 
@@ -67,6 +71,7 @@ export class Race3DRenderer {
         this.root = new THREE.Group();
         this.scene.add(this.root);
         this._buildWorld();
+        this._buildRaceEffects();
         this._loadHorseModel();
         this.resize();
     }
@@ -163,6 +168,7 @@ export class Race3DRenderer {
         const leader = distances
             .map((d, i) => ({ d, i }))
             .sort((a, b) => b.d - a.d)[0]?.i ?? 0;
+        this._updateRaceEffects(distances, leader, elapsed, dt);
 
         // ゴールした馬はラインで急停止せず、先着ほど遠くまで流して走り抜ける
         const effDist = distances.map((d, i) => {
@@ -218,7 +224,93 @@ export class Race3DRenderer {
     }
 
     dispose() {
+        if (this.spray?.mesh) {
+            this.spray.mesh.geometry.dispose();
+            this.spray.mesh.material.dispose();
+        }
         this.renderer.dispose();
+    }
+
+    _buildRaceEffects() {
+        const count = this.isMobile ? 72 : 144;
+        const geometry = new THREE.IcosahedronGeometry(0.18, 0);
+        const material = new THREE.MeshBasicMaterial({ color: 0xc8ad78, transparent: true, opacity: 0.72 });
+        const mesh = new THREE.InstancedMesh(geometry, material, count);
+        mesh.frustumCulled = false;
+        const particles = Array.from({ length: count }, () => ({
+            active: false, life: 0, maxLife: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), scale: 0,
+        }));
+        const hidden = new THREE.Object3D();
+        hidden.scale.setScalar(0);
+        hidden.updateMatrix();
+        for (let i = 0; i < count; i++) mesh.setMatrixAt(i, hidden.matrix);
+        this.spray = { mesh, particles };
+        this.root.add(mesh);
+
+        this.flashLights = Array.from({ length: this.isMobile ? 5 : 10 }, (_, i) => {
+            const light = new THREE.PointLight(0xeaf6ff, 0, 38, 2);
+            const a = Math.PI * (0.08 + (i / (this.isMobile ? 5 : 10)) * 0.84);
+            light.position.set(Math.cos(a) * 54, 12 + (i % 3) * 4, Math.sin(a) * 31);
+            light.userData.phase = i * 0.73;
+            this.scene.add(light);
+            return light;
+        });
+
+        this.winnerSpot = new THREE.SpotLight(0xffe7a0, 0, 52, Math.PI / 8, 0.55, 1.4);
+        this.winnerSpot.castShadow = false;
+        this.winnerSpot.target = new THREE.Object3D();
+        this.scene.add(this.winnerSpot, this.winnerSpot.target);
+    }
+
+    _updateRaceEffects(distances, leader, elapsed, dt) {
+        const progress = Math.max(...distances) / TRACK_LEN;
+        const leaders = distances.map((d, i) => ({ d, i })).sort((a, b) => b.d - a.d).slice(0, 3);
+        this.sprayAccumulator += dt * (this.isMobile ? 24 : 48);
+        while (this.sprayAccumulator >= 1 && progress < 1.02) {
+            this.sprayAccumulator -= 1;
+            const runner = leaders[this.sprayCursor % leaders.length];
+            const pose = this._pose(runner.d, this.layout.off[runner.i]);
+            const p = this.spray.particles[this.sprayCursor++ % this.spray.particles.length];
+            const back = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), pose.yaw);
+            p.active = true;
+            p.life = p.maxLife = 0.42 + Math.random() * 0.28;
+            p.pos.copy(pose.position).addScaledVector(back, -1.35).add(new THREE.Vector3((Math.random() - 0.5) * 0.9, 0.18, (Math.random() - 0.5) * 0.9));
+            p.vel.copy(back).multiplyScalar(-2.5 - Math.random() * 2).add(new THREE.Vector3((Math.random() - 0.5) * 1.5, 1.2 + Math.random() * 1.6, (Math.random() - 0.5) * 1.5));
+            p.scale = 0.65 + Math.random() * 1.2;
+        }
+        const dummy = new THREE.Object3D();
+        this.spray.particles.forEach((p, i) => {
+            if (p.active) {
+                p.life -= dt;
+                p.active = p.life > 0;
+                p.vel.y -= 4.5 * dt;
+                p.pos.addScaledVector(p.vel, dt);
+            }
+            dummy.position.copy(p.pos);
+            dummy.scale.setScalar(p.active ? p.scale * Math.max(0.08, p.life / p.maxLife) : 0);
+            dummy.updateMatrix();
+            this.spray.mesh.setMatrixAt(i, dummy.matrix);
+        });
+        this.spray.mesh.instanceMatrix.needsUpdate = true;
+
+        const inFinalStraight = progress > 0.72 && progress < 1;
+        this.flashClock += dt;
+        this.flashLights.forEach((light, i) => {
+            const pulse = Math.sin(elapsed * 18 + light.userData.phase * 9) > 0.965;
+            light.intensity = inFinalStraight && pulse ? (this.isMobile ? 5 : 8) : 0;
+        });
+
+        const winner = this.data.order?.[0] ?? leader;
+        const finished = distances[winner] >= TRACK_LEN - 0.5;
+        if (finished && this.horseGroups[winner]) {
+            const pos = this.horseGroups[winner].position;
+            this.winnerSpot.intensity = 7 + Math.sin(elapsed * 3) * 0.7;
+            this.winnerSpot.position.copy(pos).add(new THREE.Vector3(-5, 24, 8));
+            this.winnerSpot.target.position.copy(pos);
+            this.winnerSpot.target.updateMatrixWorld();
+        } else {
+            this.winnerSpot.intensity = 0;
+        }
     }
 
     _buildWorld() {
@@ -784,7 +876,7 @@ export class Race3DRenderer {
                 obj.receiveShadow = true;
                 if (obj.material) {
                     obj.material = obj.material.clone();
-                    obj.material.color.copy(new THREE.Color(horse.color));
+                    obj.material.color.setHex(COAT_COLORS[horse.id % COAT_COLORS.length]);
                     obj.material.roughness = 0.48;
                     obj.material.metalness = 0.04;
                     obj.material.envMapIntensity = 0.7;
