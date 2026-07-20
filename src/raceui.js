@@ -191,6 +191,11 @@ function updateLive(ordered, force = false) {
 export function renderResult(orderedHorses, payoutRows, standings, buttons) {
     showScreen("screen-result");
     const medals = ["🥇", "🥈", "🥉"];
+    const victoryHorse = document.getElementById("victory-horse");
+    if (victoryHorse && orderedHorses[0]) {
+        victoryHorse.src = `assets/art/horses/horse${orderedHorses[0].id + 1}.png`;
+        victoryHorse.alt = `${orderedHorses[0].name}の優勝肖像`;
+    }
 
     const list = document.getElementById("result-list");
     list.innerHTML = "";
