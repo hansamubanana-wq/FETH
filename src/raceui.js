@@ -20,6 +20,8 @@ export function playRace(horses, raceSeed, context = null) {
 
     const canvas = document.getElementById("track");
     const status = document.getElementById("race-status");
+    const screen = document.getElementById("screen-race");
+    screen.classList.remove("race-start-flash", "race-finish-flash");
 
     setupAbilityLive(horses, raceData);
     setupLive(context);
@@ -34,7 +36,12 @@ export function playRace(horses, raceSeed, context = null) {
             c--;
             if (c > 0) { status.textContent = c; return; }
             clearInterval(timer);
-            status.textContent = "🏇 レース中！";
+            status.textContent = "スタート！";
+            screen.classList.add("race-start-flash");
+            setTimeout(() => {
+                screen.classList.remove("race-start-flash");
+                if (status.textContent === "スタート！") status.textContent = "🏇 レース中！";
+            }, 900);
             race.onTick = (ordered, distances) => {
                 status.textContent = `🏇 先頭: ${ordered[0].name}`;
                 updateLive(ordered);
@@ -44,7 +51,9 @@ export function playRace(horses, raceSeed, context = null) {
                 race.onTick = null;
                 updateLive(ordered, true);
                 finishAbilityLive();
-                    status.textContent = `ゴール！ 1着 ${ordered[0].name}`;
+                    status.textContent = `FINISH — 1着 ${ordered[0].name}`;
+                    screen.classList.add("race-finish-flash");
+                    setTimeout(() => screen.classList.remove("race-finish-flash"), 1000);
                     setTimeout(() => resolve(ordered), 1300);
             };
             race.start();
@@ -210,10 +219,11 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
                 <div class="who">${row.name}</div>
                 <div class="detail">${row.detail}</div>
             </div>
-            <div class="delta ${cls}">${deltaStr}</div>
+            <div class="delta ${cls} payout-value" data-target="${row.delta}">±0</div>
         `;
         payoutsDiv.appendChild(div);
     });
+    payoutsDiv.querySelectorAll(".payout-value").forEach((el) => animateSignedCount(el, Number(el.dataset.target)));
 
     const st = document.getElementById("standings");
     st.innerHTML = "";
@@ -275,6 +285,17 @@ function animateCount(el, target, duration = 650) {
     const tick = (now) => {
         const t = Math.min(1, (now - started) / duration);
         el.textContent = Math.round(target * (1 - Math.pow(1 - t, 3))).toLocaleString("ja-JP");
+        if (t < 1 && el.isConnected) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+}
+
+function animateSignedCount(el, target, duration = 700) {
+    const started = performance.now();
+    const tick = (now) => {
+        const t = Math.min(1, (now - started) / duration);
+        const value = Math.round(target * (1 - Math.pow(1 - t, 3)));
+        el.textContent = value > 0 ? `+${value.toLocaleString("ja-JP")}` : value < 0 ? value.toLocaleString("ja-JP") : "±0";
         if (t < 1 && el.isConnected) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);

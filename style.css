@@ -961,6 +961,48 @@ button.ghost:active {
     filter: drop-shadow(0 2px 8px rgba(255, 176, 0, 0.3));
 }
 
+#screen-race::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    pointer-events: none;
+    opacity: 0;
+}
+
+#screen-race.race-start-flash::after {
+    content: "スタート！";
+    display: grid;
+    place-items: center;
+    color: #fff3bd;
+    font-size: clamp(3rem, 12vw, 8rem);
+    font-weight: 1000;
+    font-style: italic;
+    text-shadow: 0 4px 0 #9b5800, 0 0 36px #ffb300, 0 0 80px rgba(255, 179, 0, 0.8);
+    background: linear-gradient(90deg, transparent, rgba(255, 180, 0, 0.18), transparent);
+    animation: raceCallout 0.9s ease-out both;
+}
+
+#screen-race.race-finish-flash::after {
+    content: "FINISH";
+    display: grid;
+    place-items: center;
+    color: white;
+    font-family: Georgia, serif;
+    font-size: clamp(3.5rem, 14vw, 9rem);
+    font-weight: 1000;
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 22px #fff, 0 0 52px #ffc400;
+    background: repeating-linear-gradient(135deg, rgba(255,255,255,0.2) 0 22px, rgba(0,0,0,0.2) 22px 44px);
+    animation: raceCallout 1s ease-out both;
+}
+
+@keyframes raceCallout {
+    0% { opacity: 0; transform: scale(1.8); filter: blur(8px); }
+    18%, 70% { opacity: 1; transform: scale(1); filter: none; }
+    100% { opacity: 0; transform: scale(0.94); }
+}
+
 .race-stage {
     position: relative;
     aspect-ratio: 16 / 9;
@@ -984,11 +1026,13 @@ button.ghost:active {
 
 .live-box {
     flex: 1 1 240px;
-    background: linear-gradient(170deg, var(--panel-hi), var(--panel) 60%);
+    background: linear-gradient(155deg, rgba(39, 59, 82, 0.72), rgba(8, 15, 25, 0.66));
     border: var(--card-border);
     border-radius: 12px;
     padding: 10px 14px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
 }
 
 .live-box h4 {
@@ -1135,6 +1179,10 @@ button.ghost:active {
     margin: 16px auto;
     padding: 0;
     list-style: none;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    align-items: end;
 }
 
 .result-list li {
@@ -1145,13 +1193,34 @@ button.ghost:active {
     border: var(--card-border);
     border-radius: 12px;
     padding: 12px 16px;
-    margin-bottom: 10px;
+    margin-bottom: 0;
     font-size: 1.1rem;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     opacity: 0;
     animation: resultSlideIn 0.48s cubic-bezier(.2, .8, .2, 1) forwards;
     animation-delay: var(--result-delay, 0ms);
+    order: 4;
+    grid-column: 1 / -1;
 }
+
+.result-list li:nth-child(-n + 3) {
+    grid-column: auto;
+    min-width: 0;
+    min-height: 164px;
+    padding: 14px 8px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(53, 66, 84, 0.92), rgba(13, 23, 37, 0.92));
+    border-top: 3px solid currentColor;
+}
+
+.result-list li:nth-child(1) { order: 2; min-height: 196px; }
+.result-list li:nth-child(2) { order: 1; min-height: 174px; }
+.result-list li:nth-child(3) { order: 3; min-height: 164px; }
+.result-list li:nth-child(n + 4) { order: 4; }
+.result-list li:nth-child(-n + 3) > span:last-child { font-size: 0.92rem; }
 
 @keyframes resultSlideIn {
     from { opacity: 0; transform: translateX(-34px); }
@@ -1192,6 +1261,10 @@ button.ghost:active {
     .horse-pick { padding: 12px 8px; }
     .horse-portrait-wrap { width: 72px; }
     .result-horse-portrait { width: 42px; height: 42px; flex-basis: 42px; }
+    .result-list { gap: 6px; }
+    .result-list li:nth-child(-n + 3) { padding: 10px 5px; min-height: 148px; font-size: 0.84rem; }
+    .result-list li:nth-child(1) { min-height: 174px; }
+    .result-list li:nth-child(-n + 3) small { display: none; }
 }
 
 .winner-trophy {
