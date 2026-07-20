@@ -192,7 +192,7 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
         li.innerHTML = `
             ${i === 0 ? '<span class="winner-rays" aria-hidden="true"></span><span class="winner-trophy" aria-label="優勝">🏆</span>' : ""}
             <span class="rank">${medals[i] || i + 1}</span>
-            <span class="emoji" style="filter:drop-shadow(0 0 4px ${h.color})">${h.emoji}</span>
+            <img class="result-horse-portrait" src="assets/art/horses/horse${h.id + 1}.png" alt="" width="52" height="52">
             <span>${h.id + 1}. ${h.name} <small style="color:var(--muted)">(${h.style.label}${h.ability ? " ⚡" + h.ability.label : ""})</small></span>
         `;
         list.appendChild(li);

@@ -154,7 +154,9 @@ function renderHorses() {
         div.innerHTML = `
             ${badge}
             <div class="horse-ribbon" aria-hidden="true"><span>${h.id + 1}</span></div>
-            <div class="emoji" style="filter:drop-shadow(0 0 6px ${h.color})">${h.emoji}</div>
+            <div class="horse-portrait-wrap" style="--portrait-glow:${h.color}">
+                <img class="horse-portrait" src="assets/art/horses/horse${h.id + 1}.png" alt="${h.name}の肖像" width="160" height="160">
+            </div>
             <div class="hname">${h.id + 1}. ${h.name}</div>
             ${oddsLine}
             <div class="meters">
