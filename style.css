@@ -33,17 +33,48 @@ body {
 }
 
 /* スクロールしても動かない背景グロー(attachment:fixedはiOSで効かないためレイヤー方式) */
-body::before {
-    content: "";
+.scene-backgrounds {
     position: fixed;
     inset: 0;
-    z-index: -1;
+    width: 100vw;
+    height: 100vh;
+    height: 100svh;
+    z-index: 0;
     pointer-events: none;
+    overflow: hidden;
+    background: var(--bg);
+}
+
+.scene-background {
+    position: absolute;
+    inset: 0;
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transform: scale(1.015);
+    transition: opacity 0.4s ease;
+    will-change: opacity;
+}
+
+.scene-background-home { background-image: url("assets/art/bg-home.png"); }
+.scene-background-paddock { background-image: url("assets/art/bg-paddock.png"); }
+.scene-background-stadium { background-image: url("assets/art/bg-stadium.png"); }
+
+body:not([data-scene]),
+body[data-scene="home"] { --scene-home-opacity: 1; }
+body[data-scene="paddock"] { --scene-paddock-opacity: 1; }
+body[data-scene="stadium"] { --scene-stadium-opacity: 1; }
+.scene-background-home { opacity: var(--scene-home-opacity, 0); }
+.scene-background-paddock { opacity: var(--scene-paddock-opacity, 0); }
+.scene-background-stadium { opacity: var(--scene-stadium-opacity, 0); }
+
+.scene-background-shade {
+    position: absolute;
+    inset: 0;
     background:
-        radial-gradient(ellipse 90% 55% at 50% -10%, rgba(64, 122, 214, 0.35), transparent 70%),
-        radial-gradient(ellipse 70% 45% at 12% 108%, rgba(46, 125, 50, 0.22), transparent 70%),
-        radial-gradient(ellipse 60% 40% at 92% 100%, rgba(255, 204, 51, 0.08), transparent 70%),
-        radial-gradient(circle at top, var(--bg2), var(--bg));
+        radial-gradient(ellipse at 50% 35%, transparent 0 15%, rgba(3, 6, 10, 0.36) 70%),
+        linear-gradient(180deg, rgba(3, 6, 10, 0.34), rgba(3, 6, 10, 0.66) 56%, rgba(3, 6, 10, 0.88));
 }
 
 #app {
@@ -123,24 +154,15 @@ body::before {
     position: relative;
     isolation: isolate;
     min-height: calc(100svh - 88px);
-    margin: -24px max(-16px, calc((1000px - 100vw) / 2)) -64px;
     padding: clamp(28px, 6vh, 64px) 16px 54px;
     overflow: hidden;
 }
 
-#screen-home::before,
 #screen-home::after {
     content: "";
     position: absolute;
     inset: 0;
     pointer-events: none;
-}
-
-#screen-home::before {
-    z-index: -3;
-    background: url("assets/art/home-hero.png") center / cover no-repeat;
-    filter: saturate(0.88) contrast(1.06);
-    transform: scale(1.01);
 }
 
 #screen-home::after {
@@ -159,7 +181,7 @@ body::before {
 
 .home-logo {
     display: block;
-    width: clamp(112px, 17vw, 168px);
+    width: clamp(136px, 20vw, 192px);
     height: auto;
     aspect-ratio: 1;
     margin: 0 auto -5px;
@@ -439,6 +461,7 @@ button.primary:hover {
 .best-bet,
 .guide-sec {
     position: relative;
+    z-index: 1;
 }
 
 button.primary:active {
