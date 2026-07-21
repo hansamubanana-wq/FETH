@@ -28,16 +28,16 @@ const STYLE_KEYS = Object.keys(STYLES);
 //   penalty: 常時かかる弱体（1未満で常に少し遅い）/ fizzle: 不発の日の弱体（1未満で不発時に遅い）
 // 「出れば最強だが低確率」「強いがデメリットあり」などの個性を表現する。
 export const ABILITIES = [
-    { key: "dash", label: "好スタート", desc: "序盤に加速。安定して出やすい", proc: 0.75, lo: 0.00, hi: 0.08, dur: 0.16, boost: 0.30 },
-    { key: "spurt", label: "末脚", desc: "終盤にぐっと伸びる", proc: 0.70, lo: 0.60, hi: 0.76, dur: 0.22, boost: 0.42 },
-    { key: "nibashin", label: "二の脚", desc: "中盤で再加速", proc: 0.65, lo: 0.45, hi: 0.60, dur: 0.18, boost: 0.34 },
-    { key: "stayer", label: "持久力", desc: "長く安定して伸び続ける（控えめ）", proc: 0.85, lo: 0.30, hi: 0.45, dur: 0.42, boost: 0.18 },
-    { key: "makuri", label: "まくり", desc: "中盤に外から押し上げる", proc: 0.55, lo: 0.38, hi: 0.54, dur: 0.20, boost: 0.40 },
-    { key: "clutch", label: "勝負強さ", desc: "ゴール前で渾身の伸び", proc: 0.45, lo: 0.80, hi: 0.90, dur: 0.16, boost: 0.55 },
-    { key: "oonige", label: "大逃げ", desc: "序盤に大きく飛ばすが終始やや重い", proc: 0.60, lo: 0.00, hi: 0.06, dur: 0.28, boost: 0.55, penalty: 0.95 },
-    { key: "mura", label: "ムラ脚", desc: "ハマれば強いが、出ない日は不振", proc: 0.50, lo: 0.45, hi: 0.70, dur: 0.22, boost: 0.58, fizzle: 0.88 },
-    { key: "ippatsu", label: "一発", desc: "低確率だが超加速", proc: 0.20, lo: 0.20, hi: 0.75, dur: 0.18, boost: 0.95 },
-    { key: "monster", label: "怪物", desc: "めったに出ないが、出れば手がつけられない", proc: 0.12, lo: 0.28, hi: 0.70, dur: 0.30, boost: 1.25, penalty: 0.96 },
+    { key: "dash", label: "好スタート", desc: "序盤に加速。安定して出やすい", proc: 0.75, lo: 0.00, hi: 0.08, dur: 0.16, boost: 0.12 },
+    { key: "spurt", label: "末脚", desc: "終盤にぐっと伸びる", proc: 0.70, lo: 0.60, hi: 0.76, dur: 0.22, boost: 0.16 },
+    { key: "nibashin", label: "二の脚", desc: "中盤で再加速", proc: 0.65, lo: 0.45, hi: 0.60, dur: 0.18, boost: 0.13 },
+    { key: "stayer", label: "持久力", desc: "長く安定して伸び続ける（控えめ）", proc: 0.85, lo: 0.30, hi: 0.45, dur: 0.42, boost: 0.07 },
+    { key: "makuri", label: "まくり", desc: "中盤に外から押し上げる", proc: 0.55, lo: 0.38, hi: 0.54, dur: 0.20, boost: 0.17 },
+    { key: "clutch", label: "勝負強さ", desc: "ゴール前で渾身の伸び", proc: 0.45, lo: 0.80, hi: 0.90, dur: 0.16, boost: 0.22 },
+    { key: "oonige", label: "大逃げ", desc: "序盤に大きく飛ばすが終始やや重い", proc: 0.60, lo: 0.00, hi: 0.06, dur: 0.28, boost: 0.20, penalty: 0.985 },
+    { key: "mura", label: "ムラ脚", desc: "ハマれば強いが、出ない日は不振", proc: 0.50, lo: 0.45, hi: 0.70, dur: 0.22, boost: 0.23, fizzle: 0.965 },
+    { key: "ippatsu", label: "一発", desc: "低確率だが超加速", proc: 0.20, lo: 0.20, hi: 0.75, dur: 0.18, boost: 0.34 },
+    { key: "monster", label: "怪物", desc: "めったに出ないが、出れば手がつけられない", proc: 0.12, lo: 0.28, hi: 0.70, dur: 0.30, boost: 0.42, penalty: 0.99 },
 ];
 
 // 配列をシャッフルして先頭 n 頭を返す。各馬に基礎能力(power)・脚質・特殊能力・
@@ -56,7 +56,7 @@ export function drawHorses(n, rng = Math.random, names = null) {
         const stats = {
             speed: (power - 0.94) / 0.20,                   // スピード ← 基礎能力
             stamina: style.stamina,                         // スタミナ ← 脚質
-            kick: Math.min(1, ability.boost / 1.25),        // 瞬発力 ← 特殊能力の最大加速
+            kick: Math.min(1, ability.boost / 0.42),        // 瞬発力 ← 特殊能力の最大加速
         };
         return {
             id: i,
