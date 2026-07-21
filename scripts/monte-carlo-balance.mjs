@@ -7,12 +7,20 @@ const RANK_RUNS = 1200;
 const RACES_PER_CARD = 50;
 const OLD_DT = 1 / 60;
 const TRACK_LEN = 820;
+const OLD_ABILITIES = {
+    dash: { boost: 0.30 }, spurt: { boost: 0.42 }, nibashin: { boost: 0.34 },
+    stayer: { boost: 0.18 }, makuri: { boost: 0.40 }, clutch: { boost: 0.55 },
+    oonige: { boost: 0.55, penalty: 0.95 }, mura: { boost: 0.58, fizzle: 0.88 },
+    ippatsu: { boost: 0.95 }, monster: { boost: 1.25, penalty: 0.96 },
+};
 
 function oldInit(h, rng) {
+    const oldValues = OLD_ABILITIES[h.ability.key];
+    const ability = { ...h.ability, ...oldValues };
     return {
         id: h.id, perf: h.power * (1 + (rng() - 0.5) * 0.48), style: h.style,
-        ability: h.ability, active: rng() < h.ability.proc,
-        trigger: h.ability.lo + rng() * (h.ability.hi - h.ability.lo), x: 0, done: false,
+        ability, active: rng() < ability.proc,
+        trigger: ability.lo + rng() * (ability.hi - ability.lo), x: 0, done: false,
     };
 }
 
