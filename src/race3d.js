@@ -246,6 +246,19 @@ export class Race3DRenderer {
         });
 
         this.renderer.render(this.scene, this.camera);
+        // 検証用フック。window.__raceLog を配列にした時だけ記録する(通常時は何もしない)。
+        // scripts/verify-camera-framing.mjs が全馬のフレームインを判定するのに使う。
+        if (window.__raceLog) {
+            const prog = Math.max(...distances) / TRACK_LEN;
+            let worst = 0, outN = 0;
+            for (const g of this.horseGroups) {
+                const p = g.position.clone(); p.y += LABEL_HEADROOM; p.project(this.camera);
+                const ax = Math.abs(p.x), ay = Math.abs(p.y);
+                if (Math.max(ax, ay) > worst) worst = Math.max(ax, ay);
+                if (ax > 1 || ay > 1) outN++;
+            }
+            window.__raceLog.push({ p: +prog.toFixed(3), oy: +this.cameraOffsetCurrent.y.toFixed(1), vh: +this.viewHeight.toFixed(1), w: +worst.toFixed(3), o: outN });
+        }
         this._monitorPerformance();
     }
 
