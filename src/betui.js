@@ -215,6 +215,7 @@ function renderSelection() {
     const amountPanel = document.getElementById("amount-panel");
     const flowActions = document.getElementById("bet-flow-actions");
     const instruction = document.getElementById("pick-instruction");
+    document.getElementById("screen-pick").dataset.betPhase = cur.phase;
     const names = cur.selection.map((id) => {
         const h = cur.engine.horses.find((x) => x.id === id);
         return `${h.id + 1}.${h.name}`;

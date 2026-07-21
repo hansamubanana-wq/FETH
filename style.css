@@ -735,6 +735,55 @@ button.ghost:active {
 .purchased-bets h3 { margin: 0 0 8px; color: var(--muted); font-size: 1rem; text-align: center; }
 .purchased-bets #skip-bet { margin-top: 12px; }
 
+@media (max-width: 899px) {
+    .bet-layout {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 18px;
+    }
+
+    .bet-sidebar { position: static; }
+
+    .bet-action-panel {
+        width: 100%;
+        padding: 16px;
+    }
+
+    .bettype-tabs { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+    .bet-action-panel .bet-quick { grid-template-columns: repeat(5, 1fr); }
+
+    #screen-pick:not([data-bet-phase="idle"]) {
+        padding-bottom: calc(112px + env(safe-area-inset-bottom));
+    }
+
+    #screen-pick:not([data-bet-phase="idle"]) .bet-confirm-dock {
+        position: fixed;
+        z-index: 30;
+        right: max(8px, env(safe-area-inset-right));
+        bottom: max(6px, env(safe-area-inset-bottom));
+        left: max(8px, env(safe-area-inset-left));
+        width: auto;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 9px;
+        border: 1px solid rgba(255, 215, 92, .58);
+        border-radius: 15px;
+        background: rgba(9, 18, 31, .97);
+        box-shadow: 0 -10px 32px rgba(0, 0, 0, .55);
+        backdrop-filter: blur(12px);
+    }
+
+    #screen-pick:not([data-bet-phase="idle"]) .selection-bar {
+        margin-bottom: 7px;
+        padding: 6px 10px;
+        font-size: .78rem;
+    }
+
+    #screen-pick:not([data-bet-phase="idle"]) .bet-confirm-dock .primary {
+        min-height: 40px;
+        padding: 8px 12px;
+    }
+}
+
 @media (max-width: 430px) {
     .bet-action-panel .bet-quick { grid-template-columns: repeat(3, 1fr); }
     .bet-flow-actions { flex-direction: column; }
