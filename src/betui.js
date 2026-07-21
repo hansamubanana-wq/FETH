@@ -112,7 +112,7 @@ function renderTabs() {
         : cur.type.desc;
     document.getElementById("pick-instruction").textContent = cur.reviveMode
         ? "復活をかけて1着になる馬を選んでください"
-        : "↓ " + cur.type.instruction;
+        : `${cur.type.nPick}頭選んでください`;
 }
 function meter(label, v, valText = "", cls = "") {
     const pct = Math.round(Math.max(0, Math.min(1, v)) * 100);
@@ -156,7 +156,7 @@ function renderHorses() {
         }
         const selPos = cur.selection.indexOf(h.id);
         if (selPos >= 0) div.classList.add("selected");
-        const badge = (selPos >= 0 && type.ordered) ? `<div class="order-badge">${selPos + 1}</div>` : "";
+        const badge = selPos >= 0 ? `<div class="order-badge">${selPos + 1}</div>` : "";
 
         const s = h.stats;
         div.innerHTML = `
@@ -184,7 +184,6 @@ function renderHorses() {
 
 function tapHorse(horse) {
     const type = cur.type;
-    if (type.nPick === 1) { placeTicket([horse.id]); return; }
     const pos = cur.selection.indexOf(horse.id);
     if (pos >= 0) cur.selection.splice(pos, 1);
     else if (cur.selection.length < type.nPick) cur.selection.push(horse.id);
@@ -197,34 +196,45 @@ function renderSelection() {
     const bar = document.getElementById("selection-bar");
     const preview = document.getElementById("odds-preview");
     const confirm = document.getElementById("confirm-bet");
-
-    if (type.nPick === 1) {
-        bar.textContent = "";
-        preview.classList.add("hidden");
-        confirm.classList.add("hidden");
-        return;
-    }
+    const summary = document.getElementById("current-bet-summary");
     const names = cur.selection.map((id) => {
         const h = cur.engine.horses.find((x) => x.id === id);
         return `${h.id + 1}.${h.name}`;
     });
     const joiner = type.ordered ? " → " : " ・ ";
-    bar.textContent = names.length
-        ? `選択中: ${names.join(joiner)}（${cur.selection.length}/${type.nPick}）`
-        : `${type.nPick}頭 選んでください`;
+    const left = type.nPick - cur.selection.length;
+    bar.textContent = left > 0
+        ? `${type.nPick}頭選んでください（あと${left}頭）`
+        : `${type.label}の馬を選択しました`;
+    summary.textContent = names.length ? `${type.label}｜${names.join(joiner)}` : `${type.label}｜馬を選んでください`;
 
-    if (cur.selection.length === type.nPick) {
+    const selectionReady = cur.selection.length === type.nPick;
+    const amountReady = cur.reviveMode || (cur.amount > 0 && cur.amount <= remaining());
+    if (selectionReady) {
         const odds = cur.engine.oddsFor(type.key, cur.selection);
         const payout = cur.reviveMode ? 3000 : Math.floor(cur.amount * odds);
         preview.innerHTML = cur.reviveMode
             ? `復活成功で <b class="number-roll">${payout.toLocaleString("ja-JP")}</b> コイン`
             : `予想オッズ <b class="number-roll">${odds}倍</b> ・ 当たれば <b class="number-roll">${payout.toLocaleString("ja-JP")}</b> コイン`;
         preview.classList.remove("hidden");
-        confirm.classList.remove("hidden");
     } else {
+        preview.textContent = "";
         preview.classList.add("hidden");
-        confirm.classList.add("hidden");
     }
+    confirm.disabled = !(selectionReady && amountReady);
+    confirm.textContent = !selectionReady
+        ? `馬をあと${left}頭選んでください`
+        : !amountReady ? "金額を入力してください" : "この内容で賭ける";
+    updateSteps(selectionReady);
+}
+
+function updateSteps(selectionReady) {
+    const step = selectionReady ? 3 : 2;
+    document.querySelectorAll("#bet-steps li").forEach((el) => {
+        const n = Number(el.dataset.step);
+        el.classList.toggle("active", n === step);
+        el.classList.toggle("done", n < step);
+    });
 }
 function placeTicket(sel) {
     if (!cur.reviveMode && (cur.amount <= 0 || cur.amount > remaining())) return;
@@ -256,7 +266,10 @@ function removeTicket(i) {
 function renderBetslip() {
     const el = document.getElementById("betslip");
     el.innerHTML = "";
-    if (!cur.tickets.length) return;
+    if (!cur.tickets.length) {
+        el.innerHTML = '<p class="betslip-empty">まだ購入したベットはありません</p>';
+        return;
+    }
 
     const title = document.createElement("div");
     title.className = "betslip-title";

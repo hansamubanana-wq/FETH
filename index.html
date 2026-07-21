@@ -205,6 +205,12 @@
             <h2 id="pick-title">あなたの番</h2>
             <div class="balance-bar">賭けられる残り <b><span id="pick-balance">1000</span></b> コイン</div>
 
+            <ol id="bet-steps" class="bet-steps" aria-label="ベットの手順">
+                <li data-step="1"><b>①</b> 賭け式を選ぶ</li>
+                <li data-step="2"><b>②</b> 馬を選ぶ</li>
+                <li data-step="3"><b>③</b> 金額を決めて賭ける</li>
+            </ol>
+
             <label class="field name-field" id="name-wrap">
                 <span>あなたの名前（任意）</span>
                 <input id="player-name" type="text" maxlength="10" placeholder="プレイヤー1">
@@ -216,27 +222,35 @@
                 <p id="bettype-desc" class="bettype-desc"></p>
             </div>
 
-            <div class="field bet-field">
-                <span>かけるコイン</span>
-                <div class="counter">
-                    <button type="button" id="bet-minus">−</button>
-                    <input id="bet-amount" type="number" inputmode="numeric" min="0" step="100" value="100">
-                    <button type="button" id="bet-plus">＋</button>
-                </div>
-                <div class="bet-quick">
-                    <button type="button" data-bet="half">半分</button>
-                    <button type="button" data-bet="all">全部</button>
-                </div>
-            </div>
-
             <p class="subtitle" id="pick-instruction">↓ 賭ける馬をタップ</p>
             <div id="selection-bar" class="selection-bar"></div>
-            <div id="odds-preview" class="odds-preview hidden"></div>
             <div id="horse-choices" class="horse-grid"></div>
-            <div id="betslip" class="betslip"></div>
-            <div class="pick-actions">
-                <button id="confirm-bet" class="primary hidden">この馬券を買う</button>
+
+            <section class="purchased-bets" aria-labelledby="purchased-bets-title">
+                <h3 id="purchased-bets-title">購入済みのベット</h3>
+                <div id="betslip" class="betslip"></div>
                 <button id="skip-bet" class="ghost">ベットを終了する</button>
+            </section>
+
+            <div class="current-betslip" aria-label="現在のベット内容">
+                <div class="current-betslip-summary">
+                    <b>ベットスリップ</b>
+                    <span id="current-bet-summary">馬を選んでください</span>
+                    <span id="odds-preview" class="odds-preview"></span>
+                </div>
+                <div class="bet-field">
+                    <span>金額</span>
+                    <div class="counter">
+                        <button type="button" id="bet-minus" aria-label="100コイン減らす">−</button>
+                        <input id="bet-amount" type="number" inputmode="numeric" min="0" step="100" value="100">
+                        <button type="button" id="bet-plus" aria-label="100コイン増やす">＋</button>
+                    </div>
+                    <div class="bet-quick">
+                        <button type="button" data-bet="half">半分</button>
+                        <button type="button" data-bet="all">全部</button>
+                    </div>
+                </div>
+                <button id="confirm-bet" class="primary" disabled>馬を選んでください</button>
             </div>
         </section>
 

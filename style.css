@@ -559,6 +559,39 @@ button.ghost:active {
 }
 
 /* 賭け式タブ */
+.bet-steps {
+    position: sticky;
+    top: 6px;
+    z-index: 20;
+    max-width: 720px;
+    margin: 10px auto 18px;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    list-style: none;
+    border: 1px solid rgba(255, 204, 51, 0.25);
+    border-radius: 14px;
+    background: rgba(9, 18, 31, 0.94);
+    backdrop-filter: blur(10px);
+}
+
+.bet-steps li {
+    padding: 9px 6px;
+    border-radius: 9px;
+    color: var(--muted);
+    font-size: .82rem;
+    text-align: center;
+}
+
+.bet-steps li.done { color: #d4c17a; }
+.bet-steps li.active {
+    color: #241900;
+    font-weight: 800;
+    background: linear-gradient(135deg, #ffe58a, #f2b929);
+    box-shadow: 0 0 16px rgba(255, 204, 51, .24);
+}
+
 .bettype-tabs {
     display: flex;
     flex-wrap: wrap;
@@ -618,23 +651,66 @@ button.ghost:active {
 }
 
 .odds-preview {
-    max-width: 640px;
-    margin: 10px auto 0;
-    text-align: center;
-    background: var(--bg2);
-    border: 1px solid rgba(255, 204, 51, 0.35);
-    border-radius: 10px;
-    padding: 10px;
-    box-shadow: 0 0 14px rgba(255, 204, 51, 0.1);
+    color: var(--muted);
+    font-size: .84rem;
 }
 
 .odds-preview b {
     color: var(--accent);
 }
 
-.pick-actions {
-    max-width: 480px;
+.current-betslip {
+    position: sticky;
+    z-index: 25;
+    bottom: 8px;
+    width: min(100%, 760px);
     margin: 18px auto 0;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(210px, .8fr) minmax(190px, .7fr);
+    align-items: center;
+    gap: 12px;
+    border: 1px solid rgba(255, 215, 92, .58);
+    border-radius: 16px;
+    background: rgba(12, 22, 37, .96);
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, .42);
+    backdrop-filter: blur(12px);
+}
+
+.current-betslip-summary { display: grid; gap: 4px; min-width: 0; }
+.current-betslip-summary > span { overflow-wrap: anywhere; }
+.current-betslip .bet-field { margin: 0; }
+.current-betslip .bet-field > span { display: block; margin-bottom: 4px; color: var(--muted); font-size: .78rem; }
+.current-betslip .counter { grid-template-columns: 38px minmax(70px, 1fr) 38px; }
+.current-betslip .counter button { padding: 8px 4px; }
+.current-betslip .bet-quick { margin-top: 5px; gap: 5px; }
+.current-betslip .bet-quick button { padding: 5px; font-size: .78rem; }
+.current-betslip .primary { margin: 0; min-height: 48px; }
+.current-betslip .primary:disabled { opacity: .48; cursor: not-allowed; filter: grayscale(.35); }
+
+.purchased-bets {
+    max-width: 600px;
+    margin: 24px auto 0;
+    padding: 16px;
+    border-top: 1px solid rgba(159, 179, 207, .28);
+    background: rgba(10, 18, 30, .42);
+    border-radius: 14px;
+}
+
+.purchased-bets h3 { margin: 0 0 8px; color: var(--muted); font-size: 1rem; text-align: center; }
+.purchased-bets #skip-bet { margin-top: 12px; }
+
+@media (max-width: 680px) {
+    .current-betslip { grid-template-columns: 1fr 1fr; bottom: 4px; padding: 10px; gap: 8px; }
+    .current-betslip-summary { grid-column: 1 / -1; }
+    .current-betslip .primary { height: 100%; }
+}
+
+@media (max-width: 430px) {
+    .bet-steps li { font-size: .72rem; padding-inline: 3px; }
+    .bet-steps li b { display: block; font-size: 1rem; }
+    .current-betslip { grid-template-columns: 1fr; }
+    .current-betslip-summary { grid-column: auto; }
 }
 
 /* 馬券リスト */
@@ -683,6 +759,8 @@ button.ghost:active {
     position: relative;
     animation: selectedGoldPulse 1.35s ease-in-out infinite;
 }
+
+.betslip-empty { margin: 8px 0; color: var(--muted); font-size: .86rem; text-align: center; }
 
 @keyframes selectedGoldPulse {
     0%, 100% { box-shadow: 0 0 0 2px rgba(255, 224, 130, 0.65), 0 0 14px rgba(255, 204, 51, 0.28); }
