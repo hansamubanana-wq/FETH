@@ -1,6 +1,18 @@
 rules_version = '2';
+
+// 注意: この Firebase プロジェクト(ProspiA / prospia-d5526)は
+// 競馬ゲーム(Keiba)と prospi-round-robin の2アプリで共用している。
+// コンソールに貼るときは必ずこのファイル全体を貼ること。
+// tournaments のブロックを消すと prospi-round-robin が壊れる。
+// (2026-07-13 にこのファイルの旧版を貼って rooms/meta が消え、オンライン対戦が不能になった)
 service cloud.firestore {
   match /databases/{database}/documents {
+    // --- prospi-round-robin 用 ---
+    match /tournaments/main {
+      allow read, write: if true;
+    }
+
+    // --- 競馬ゲーム(Keiba)用 ---
     // 競馬ゲームのルーム。お金が絡まないカジュアル用途なので誰でも読み書き可。
     match /rooms/{code} {
       allow read, write: if true;
