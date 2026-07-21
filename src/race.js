@@ -1,100 +1,12 @@
 // レースの基礎パラメータ。事前計算シミュレーションと再生で共有する。
 import { Race3DRenderer } from "./race3d.js";
+import { RACE_SIM_CONSTANTS, simulateOrder, simulateRaceData } from "./race-sim.js";
+export { simulateOrder, simulateRaceData } from "./race-sim.js";
 
-const SPEED_BASE = 190;   // perf=1 のときの基準速度(px/s)
-const SPEED_NOISE = 100;  // 毎フレームの緩急の振れ幅(±)。大きいほど競り合いが激しい
-const TRACK_LEN = 820;    // 1周の距離（内部単位）
-const RACE_JITTER = 0.24; // レース毎に実力がブレる幅(±24%)。弱い馬にも一発がある
-const SIM_DT = 1 / 60;    // 事前計算の固定タイムステップ(s)
+const { TRACK_LEN } = RACE_SIM_CONSTANTS;
 const RACE_DURATION = 40; // 1着馬がゴールするまでの秒数（演出尺）
 const TAIL_DURATION = 7;  // 1着後、残りの馬が全員ゴールするまでの秒数（早送り）
 
-// レース開始時に1頭ぶんの状態を作る。実力 = 基礎能力 × 毎レースの実力ブレ。
-function initRunner(h, rng) {
-    const ab = h.ability;
-    const perf = h.power * (1 + (rng() - 0.5) * 2 * RACE_JITTER);
-    const active = rng() < ab.proc;                 // 今回そのレースで発動するか
-    const trigger = ab.lo + rng() * (ab.hi - ab.lo); // 発動位置
-    return { id: h.id, perf, style: h.style, ability: ab, active, trigger, x: 0, done: false };
-}
-
-// 1ステップの瞬間速度。perf を基準に、脚質(pace)・特殊能力・緩急(noise)を掛ける。
-function computeSpeed(r, t, rng) {
-    let pace = r.style.profile(Math.min(1, Math.max(0, t)));
-    pace *= (r.ability.penalty || 1); // 常時デメリット
-    if (r.active) {
-        if (t >= r.trigger && t <= r.trigger + r.ability.dur) pace *= (1 + r.ability.boost); // 発動中ブースト
-    } else {
-        pace *= (r.ability.fizzle || 1); // 不発の日のデメリット
-    }
-    return Math.max(30, SPEED_BASE * r.perf * pace + (rng() - 0.5) * 2 * SPEED_NOISE);
-}
-
-// 着順(horse.id配列)だけを返す軽量シミュレーション。オッズ算出用。
-export function simulateOrder(horses, rng) {
-    const runners = horses.map((h) => initRunner(h, rng));
-    const order = [];
-    while (order.length < runners.length) {
-        for (const r of runners) {
-            if (r.done) continue;
-            r.x += computeSpeed(r, r.x / TRACK_LEN, rng) * SIM_DT;
-            if (r.x >= TRACK_LEN) {
-                r.done = true;
-                order.push(r.id);
-            }
-        }
-    }
-    return order;
-}
-
-// レース全体を固定タイムステップで事前計算する。
-// 返り値: 全フレームの各馬位置・着順・着差・特殊能力の発動区間。
-export function simulateRaceData(horses, rng) {
-    const n = horses.length;
-    const runners = horses.map((h) => initRunner(h, rng));
-    const frames = [];      // frames[f][i] = 馬iのx
-    const finishTime = new Array(n).fill(null);
-    const order = [];       // ゴール順の馬index
-    let time = 0;
-
-    while (order.length < n) {
-        frames.push(runners.map((r) => r.x));
-        time += SIM_DT;
-        for (let i = 0; i < n; i++) {
-            const r = runners[i];
-            if (r.done) continue;
-            const sp = computeSpeed(r, r.x / TRACK_LEN, rng);
-            r.x += sp * SIM_DT;
-            if (r.x >= TRACK_LEN) {
-                const over = r.x - TRACK_LEN;
-                finishTime[i] = time - over / Math.max(1, sp); // ライン到達を補間
-                r.x = TRACK_LEN;  // ゴール線で停止
-                r.done = true;
-                order.push(i);
-            }
-        }
-    }
-    frames.push(runners.map((r) => r.x)); // 最終フレーム
-
-    // 着順は着差（到達時間）で厳密に並べる（同一ステップ内の取りこぼし防止）
-    order.sort((a, b) => finishTime[a] - finishTime[b]);
-    const gap = order.length >= 2 ? Math.abs(finishTime[order[1]] - finishTime[order[0]]) : 999;
-
-    // 発動した能力の区間（進行度 t）を表示用に保持（不発の馬は -1/null）
-    const abFrom = runners.map((r) => (r.active ? r.trigger : -1));
-    const abTo = runners.map((r) => (r.active ? r.trigger + r.ability.dur : -1));
-    const abLabel = runners.map((r) => (r.active ? r.ability.label : null));
-    const abilityEvents = runners.map((r) => ({
-        horseId: r.id,
-        label: r.ability.label,
-        active: r.active,
-        from: r.active ? r.trigger : -1,
-        to: r.active ? r.trigger + r.ability.dur : -1,
-        boost: r.ability.boost || 0,
-    }));
-
-    return { dt: SIM_DT, frames, order, finishTime, gap, trackLen: TRACK_LEN, abFrom, abTo, abLabel, abilityEvents };
-}
 
 // 事前計算した raceData を canvas に実時間で再生するプレイヤー（オーバルコース1周）。
 export class Race {

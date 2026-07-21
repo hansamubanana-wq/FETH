@@ -1,7 +1,7 @@
 // ゲームのルール部分（馬・オッズ・払い戻し）。ローカルでもオンラインでも共通。
 // すべて horseSeed から決定論的に作るので、同じ seed なら全端末で完全一致する。
 import { drawHorses } from "./horses.js";
-import { simulateOrder } from "./race.js";
+import { simulateOrder } from "./race-sim.js";
 import { makeRng } from "./rng.js";
 import { buildBetTypes } from "./bets.js";
 
