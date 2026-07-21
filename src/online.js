@@ -574,7 +574,18 @@ function renderPlayerList(elId, room, statusFn) {
         const me = id === uid ? "（あなた）" : "";
         const bankrupt = p.bankrupt ? " / BANKRUPT" : "";
         const status = statusFn ? statusFn(p) : `${p.balance} coins${bankrupt}`;
-        li.innerHTML = `<span>${p.name}${tag}${me}</span><span class="coins">${status}</span>`;
+        const avatar = document.createElement("span");
+        const label = document.createElement("span");
+        const coinLabel = document.createElement("span");
+        const playerName = String(p.name || "?");
+        avatar.className = "player-avatar";
+        avatar.textContent = playerName.slice(0, 1).toUpperCase();
+        avatar.style.setProperty("--avatar-hue", String([...playerName].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360));
+        label.className = "player-name";
+        label.textContent = `${playerName}${tag}${me}`;
+        coinLabel.className = "coins";
+        coinLabel.textContent = status;
+        li.append(avatar, label, coinLabel);
         el.appendChild(li);
     });
 }

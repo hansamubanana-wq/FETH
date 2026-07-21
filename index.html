@@ -103,9 +103,9 @@
         </section>
 
         <!-- オンライン：ホーム -->
-        <section id="screen-online-home" class="screen">
+        <section id="screen-online-home" class="screen online-screen">
             <h1>🌐 オンライン対戦</h1>
-            <div class="card">
+            <div class="card online-panel">
                 <div class="profile-box">
                     <div class="recent-label">プレイヤー名</div>
                     <div class="name-reg-row">
@@ -135,9 +135,9 @@
         </section>
 
         <!-- オンライン：未設定の案内 -->
-        <section id="screen-online-setup-needed" class="screen">
+        <section id="screen-online-setup-needed" class="screen online-screen">
             <h2>オンラインは設定が必要です</h2>
-            <div class="card">
+            <div class="card online-panel">
                 <p>オンライン対戦を使うには、あなたの Firebase プロジェクトの設定を
                     <code>src/firebase-config.js</code> に入れてください。</p>
                 <p class="hint">設定後はこのまま使えます。</p>
@@ -146,9 +146,9 @@
         </section>
 
         <!-- オンライン：部屋を作る -->
-        <section id="screen-create" class="screen">
+        <section id="screen-create" class="screen online-screen">
             <h2>部屋を作る</h2>
-            <div class="card">
+            <div class="card online-panel room-form-panel">
                 <label class="field"><span>あなたの名前</span>
                     <input id="create-name" type="text" maxlength="10" placeholder="ホスト"></label>
                 <label class="field"><span>初期コイン</span>
@@ -159,9 +159,9 @@
         </section>
 
         <!-- オンライン：参加 -->
-        <section id="screen-join" class="screen">
+        <section id="screen-join" class="screen online-screen">
             <h2>合言葉で参加</h2>
-            <div class="card">
+            <div class="card online-panel room-form-panel">
                 <label class="field"><span>合言葉（4文字）</span>
                     <input id="join-code" type="text" maxlength="4" placeholder="ABCD" autocapitalize="characters"></label>
                 <label class="field"><span>あなたの名前</span>
@@ -172,25 +172,30 @@
         </section>
 
         <!-- オンライン：ロビー -->
-        <section id="screen-lobby" class="screen">
+        <section id="screen-lobby" class="screen online-screen">
             <h2>待機ルーム</h2>
-            <div class="code-box">合言葉 <b id="lobby-code">----</b></div>
-            <ol id="lobby-players" class="standings"></ol>
-            <p class="subtitle" id="lobby-note"></p>
-            <div class="result-buttons">
-                <button id="lobby-invite" class="ghost">📨 招待リンクを送る</button>
-                <div id="lobby-friend-invites" class="friend-list hidden"></div>
-                <button id="lobby-start" class="primary hidden">ゲーム開始</button>
-                <button class="ghost" data-leave>退出する</button>
+            <div class="card online-panel lobby-panel">
+                <div class="code-box">合言葉 <b id="lobby-code">----</b></div>
+                <ol id="lobby-players" class="standings player-cards"></ol>
+                <p class="subtitle" id="lobby-note"></p>
+                <div class="result-buttons">
+                    <button id="lobby-invite" class="ghost">📨 招待リンクを送る</button>
+                    <div id="lobby-friend-invites" class="friend-list hidden"></div>
+                    <button id="lobby-start" class="primary hidden">ゲーム開始</button>
+                    <button class="ghost" data-leave>退出する</button>
+                </div>
             </div>
         </section>
 
         <!-- オンライン：待機（賭け待ち / 次レース待ち） -->
-        <section id="screen-wait" class="screen">
+        <section id="screen-wait" class="screen online-screen">
             <h2 id="wait-title">待機中…</h2>
-            <ol id="wait-players" class="standings"></ol>
-            <div class="result-buttons">
-                <button class="ghost" data-leave>退出する</button>
+            <div class="card online-panel lobby-panel">
+                <div class="waiting-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+                <ol id="wait-players" class="standings player-cards"></ol>
+                <div class="result-buttons">
+                    <button class="ghost" data-leave>退出する</button>
+                </div>
             </div>
         </section>
 
