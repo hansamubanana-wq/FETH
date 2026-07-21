@@ -4,9 +4,11 @@ import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
 const HORSE_MODEL_URL = "https://threejs.org/examples/models/gltf/Horse.glb";
 const TRACK_LEN = 820;
-const CENTER_RX_SCALE = 0.13;
-const CENTER_RZ_SCALE = 0.16;
+const VENUE_SCALE = 1.22;
+const CENTER_RX_SCALE = 0.13 * VENUE_SCALE;
+const CENTER_RZ_SCALE = 0.16 * VENUE_SCALE;
 const LANE_SPREAD = 0.13;
+const PLAYBACK_SPEED = 1.25;
 const COAT_COLORS = [0x8b3f24, 0x5a321f, 0x3b2a24, 0xb9783f, 0x6d5141, 0xd8c8aa, 0x9b4f2e, 0x24211f];
 const HIGH_PIXEL_RATIO = 2;
 const FALLBACK_PIXEL_RATIO = 1.5;
@@ -14,8 +16,8 @@ const FPS_SAMPLE_MS = 3000;
 const MIN_ACCEPTABLE_FPS = 30;
 
 // 動的カメラの設定
-const FULL_VIEW_HEIGHT = 64;   // コース全体が収まる視野の高さ(=最大ズームアウト)
-const MIN_VIEW_HEIGHT = 34;    // 馬群が密集しているときの最大ズームイン
+const FULL_VIEW_HEIGHT = 78;   // 拡大した会場全体が収まる最大ズームアウト
+const MIN_VIEW_HEIGHT = 36;    // 馬群と頭上表示を保ったまま背景の流れを見せる
 const VIEW_MARGIN_X = 9;       // 画面左右の余白(ワールド単位)。アビリティ表示の横幅も考慮
 const VIEW_MARGIN_Y = 4;       // 画面上下の余白(ワールド単位)
 const LABEL_HEADROOM = 15;     // 馬番プレート・アビリティ表示ぶんの頭上余白
@@ -58,6 +60,7 @@ export class Race3DRenderer {
 
         this.camera = new THREE.OrthographicCamera(-62, 62, 35, -35, 0.1, 300);
         this.cameraOffset = new THREE.Vector3(0, 52, 72);
+        this.cameraOffsetCurrent = this.cameraOffset.clone();
         this.viewTarget = new THREE.Vector3(0, 0, 0);
         this.viewHeight = FULL_VIEW_HEIGHT;
         this.aspect = 16 / 9;
@@ -387,7 +390,7 @@ export class Race3DRenderer {
         this.scene.add(sun);
 
         const turf = new THREE.Mesh(
-            new THREE.PlaneGeometry(220, 150, 1, 1),
+            new THREE.PlaneGeometry(280, 190, 1, 1),
             new THREE.MeshStandardMaterial({
                 color: 0x2d8a3b,
                 map: this._createGrassTexture(),
@@ -401,6 +404,7 @@ export class Race3DRenderer {
         this._addSky();
         this._addTrack();
         this._addRails();
+        this._addDistanceMarkers();
         this._addGrandstand();
         this._addFinishGate();
         this._addInfield();
@@ -562,9 +566,9 @@ export class Race3DRenderer {
         canvas.width = 256;
         canvas.height = 256;
         const ctx = canvas.getContext("2d");
-        for (let x = 0; x < canvas.width; x += 32) {
-            ctx.fillStyle = (x / 32) % 2 ? "#236d30" : "#2d8138";
-            ctx.fillRect(x, 0, 32, canvas.height);
+        for (let x = 0; x < canvas.width; x += 16) {
+            ctx.fillStyle = (x / 16) % 2 ? "#236d30" : "#2d8138";
+            ctx.fillRect(x, 0, 16, canvas.height);
         }
         for (let i = 0; i < 3600; i++) {
             const x = Math.random() * canvas.width;
@@ -582,7 +586,7 @@ export class Race3DRenderer {
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(5, 4);
+        texture.repeat.set(8, 6);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
         return texture;
@@ -598,8 +602,8 @@ export class Race3DRenderer {
             rail.castShadow = true;
             this.root.add(rail);
 
-            for (let i = 0; i < 56; i++) {
-                const p = this._pose((i / 56) * TRACK_LEN, offset);
+            for (let i = 0; i < 96; i++) {
+                const p = this._pose((i / 96) * TRACK_LEN, offset);
                 const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.9, 8), railMat);
                 post.position.copy(p.position);
                 post.position.y = 0.45;
@@ -607,6 +611,25 @@ export class Race3DRenderer {
                 this.root.add(post);
             }
         });
+    }
+
+    _addDistanceMarkers() {
+        const { edge } = this._laneMetrics();
+        const poleMat = new THREE.MeshStandardMaterial({ color: 0xf7f5ea, roughness: 0.5 });
+        const redMat = new THREE.MeshStandardMaterial({ color: 0xd32f2f, roughness: 0.55 });
+        for (let i = 1; i <= 16; i++) {
+            const p = this._pose((i / 16) * TRACK_LEN, edge + 3.4);
+            const group = new THREE.Group();
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.18, 3.7, 8), poleMat);
+            pole.position.y = 1.85;
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.72, 1.15, 0.34), i % 2 ? redMat : poleMat);
+            cap.position.y = 3.35;
+            group.add(pole, cap);
+            group.position.copy(p.position);
+            group.rotation.y = p.yaw;
+            group.traverse((obj) => { if (obj.isMesh) obj.castShadow = true; });
+            this.root.add(group);
+        }
     }
 
     _addGrandstand() {
