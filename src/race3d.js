@@ -35,6 +35,8 @@ export class Race3DRenderer {
         this.sprayCursor = 0;
         this.sprayAccumulator = 0;
         this.flashClock = 0;
+        this.visionLastUpdate = -1;
+        this.startDoors = [];
         // 事前計算済みレースデータから決めるため、同じレースは全端末で同じ空になる。
         this.skyTheme = Math.floor(data.finishTime.reduce((sum, value) => sum + value, 0) * 1000) % 3;
         this.timeOfDay = ["day", "sunset", "night"][this.skyTheme];
@@ -171,6 +173,8 @@ export class Race3DRenderer {
         const leader = distances
             .map((d, i) => ({ d, i }))
             .sort((a, b) => b.d - a.d)[0]?.i ?? 0;
+        this._updateVision(distances, elapsed);
+        this._updateStartGate(elapsed);
         this._updateRaceEffects(distances, leader, elapsed, dt);
 
         // ゴールした馬はラインで急停止せず、先着ほど遠くまで流して走り抜ける
@@ -717,6 +721,30 @@ export class Race3DRenderer {
         strip.position.set(0, 0.15, (zI + zO) / 2);
         strip.renderOrder = 5;
         this.root.add(strip);
+
+        // 発馬機の各枠。レース開始直後に前扉が左右へ開く。
+        const stallDepth = (zO - zI) / this.horses.length;
+        const gateMat = new THREE.MeshStandardMaterial({ color: 0xd9e2e8, roughness: 0.42, metalness: 0.62 });
+        const doorMat = new THREE.MeshStandardMaterial({ color: 0x1f6d42, roughness: 0.38, metalness: 0.38 });
+        for (let i = 0; i <= this.horses.length; i++) {
+            const z = zI + i * stallDepth;
+            const rail = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.7, 0.09), gateMat);
+            rail.position.set(-1.15, 1.45, z);
+            this.root.add(rail);
+        }
+        for (let i = 0; i < this.horses.length; i++) {
+            const z = zI + (i + 0.5) * stallDepth;
+            [-1, 1].forEach((side) => {
+                const pivot = new THREE.Group();
+                pivot.position.set(0.22, 1.45, z + side * stallDepth * 0.24);
+                const door = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.65, stallDepth * 0.46), doorMat);
+                door.position.z = -side * stallDepth * 0.23;
+                pivot.add(door);
+                pivot.userData.side = side;
+                this.startDoors.push(pivot);
+                this.root.add(pivot);
+            });
+        }
     }
 
     _addInfield() {
@@ -739,6 +767,32 @@ export class Race3DRenderer {
         rim.scale.set(16.4, 8.8, 1);
         rim.position.set(-6, 0.065, 2);
         this.root.add(rim);
+
+        // 内馬場の大型ビジョン。テクスチャ更新は最大1秒に1回。
+        this.visionCanvas = document.createElement("canvas");
+        this.visionCanvas.width = 512;
+        this.visionCanvas.height = 288;
+        this.visionCtx = this.visionCanvas.getContext("2d");
+        this.visionTexture = new THREE.CanvasTexture(this.visionCanvas);
+        this.visionTexture.colorSpace = THREE.SRGBColorSpace;
+        const visionFrame = new THREE.Mesh(
+            new THREE.BoxGeometry(20.8, 12.4, 0.8),
+            new THREE.MeshStandardMaterial({ color: 0x161b22, roughness: 0.36, metalness: 0.72 })
+        );
+        visionFrame.position.set(24, 7.2, -4);
+        this.root.add(visionFrame);
+        const vision = new THREE.Mesh(
+            new THREE.PlaneGeometry(19.2, 10.8),
+            new THREE.MeshBasicMaterial({ map: this.visionTexture })
+        );
+        vision.position.set(24, 7.2, -3.55);
+        this.root.add(vision);
+        for (const x of [18, 30]) {
+            const support = new THREE.Mesh(new THREE.BoxGeometry(0.7, 7, 0.7), new THREE.MeshStandardMaterial({ color: 0x30343b, metalness: 0.65 }));
+            support.position.set(x, 3.5, -4);
+            this.root.add(support);
+        }
+        this._paintVision(this.horses.map((_, i) => i).slice(0, 3));
 
         // 花壇: 色とりどりの小さなドットを帯状に散らす
         const flowerGeo = new THREE.SphereGeometry(0.22, 6, 5);
@@ -899,6 +953,49 @@ export class Race3DRenderer {
         }
         this.ready = true;
         this.onProgress?.(1);
+    }
+
+    _updateStartGate(elapsed) {
+        const open = Math.min(1, Math.max(0, elapsed / 0.7));
+        const eased = 1 - (1 - open) ** 3;
+        this.startDoors.forEach((pivot) => {
+            pivot.rotation.y = pivot.userData.side * eased * Math.PI * 0.48;
+        });
+    }
+
+    _updateVision(distances, elapsed) {
+        const second = Math.floor(elapsed);
+        if (second === this.visionLastUpdate || !this.visionTexture) return;
+        this.visionLastUpdate = second;
+        const top = distances.map((distance, i) => ({ distance, i }))
+            .sort((a, b) => b.distance - a.distance)
+            .slice(0, 3)
+            .map((entry) => entry.i);
+        this._paintVision(top);
+    }
+
+    _paintVision(top) {
+        const ctx = this.visionCtx;
+        if (!ctx) return;
+        ctx.fillStyle = "#05080b";
+        ctx.fillRect(0, 0, 512, 288);
+        ctx.fillStyle = "#d7a72c";
+        ctx.fillRect(0, 0, 512, 48);
+        ctx.fillStyle = "#100d06";
+        ctx.font = "900 27px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("LIVE  TOP 3", 256, 33);
+        top.forEach((horseIndex, rank) => {
+            const horse = this.horses[horseIndex];
+            const y = 92 + rank * 62;
+            ctx.fillStyle = rank === 0 ? "#fff0a8" : "#e6edf3";
+            ctx.font = rank === 0 ? "900 30px sans-serif" : "700 27px sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText(`${rank + 1}  ${horse.id + 1}  ${horse.name}`, 34, y);
+            ctx.fillStyle = horse.color;
+            ctx.fillRect(444, y - 25, 34, 34);
+        });
+        this.visionTexture.needsUpdate = true;
     }
 
     _addNightLighting() {

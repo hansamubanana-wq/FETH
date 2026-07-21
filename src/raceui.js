@@ -21,6 +21,9 @@ export function playRace(horses, raceSeed, context = null) {
     const canvas = document.getElementById("track");
     const status = document.getElementById("race-status");
     const screen = document.getElementById("screen-race");
+    const finishTelops = document.getElementById("finish-telops");
+    const announcedFinishers = new Set();
+    if (finishTelops) finishTelops.replaceChildren();
     screen.classList.remove("race-start-flash", "race-finish-flash");
 
     setupAbilityLive(horses, raceData);
@@ -56,6 +59,13 @@ export function playRace(horses, raceSeed, context = null) {
                 status.textContent = `🏇 先頭: ${ordered[0].name}`;
                 updateLive(ordered);
                 updateAbilityLive(distances);
+                for (const horse of ordered) {
+                    if (announcedFinishers.size >= 3) break;
+                    const horseIndex = horses.indexOf(horse);
+                    if (horseIndex < 0 || distances[horseIndex] < raceData.trackLen - 0.5 || announcedFinishers.has(horse.id)) continue;
+                    announcedFinishers.add(horse.id);
+                    showFinishTelop(finishTelops, announcedFinishers.size, horse);
+                }
             };
             race.onFinish = (ordered) => {
                 race.onTick = null;
@@ -70,6 +80,22 @@ export function playRace(horses, raceSeed, context = null) {
             }, 700);
         });
     });
+}
+
+function showFinishTelop(container, rank, horse) {
+    if (!container) return;
+    const row = document.createElement("div");
+    row.className = `finish-telop rank-${rank}`;
+    const rankLabel = document.createElement("span");
+    const number = document.createElement("b");
+    const name = document.createElement("strong");
+    rankLabel.textContent = `${rank}着`;
+    number.textContent = horse.id + 1;
+    name.textContent = horse.name;
+    row.append(rankLabel, number, name);
+    container.appendChild(row);
+    setTimeout(() => row.classList.add("leaving"), 2100);
+    setTimeout(() => row.remove(), 2600);
 }
 
 // ---- ライブ表示（誰が何に賭けたか・現在順位での損益）----
