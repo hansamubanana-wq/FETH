@@ -4,8 +4,8 @@ import { RACE_SIM_CONSTANTS, simulateOrder, simulateRaceData } from "./race-sim.
 export { simulateOrder, simulateRaceData } from "./race-sim.js";
 
 const { TRACK_LEN } = RACE_SIM_CONSTANTS;
-const RACE_DURATION = 40; // 1着馬がゴールするまでの秒数（演出尺）
-const TAIL_DURATION = 7;  // 1着後、残りの馬が全員ゴールするまでの秒数（早送り）
+export const RACE_DURATION = 32; // 現行比1.25倍速。着順計算は変えず再生尺だけを8割にする
+const TAIL_DURATION = 5.6;       // 1着後も同じ倍率で再生する
 
 
 // 事前計算した raceData を canvas に実時間で再生するプレイヤー（オーバルコース1周）。

@@ -158,7 +158,8 @@ export class Race3DRenderer {
     render(distances, elapsed = 0) {
         this.resize();
         const dt = Math.min(0.05, this.clock.getDelta());
-        for (const mixer of this.mixers) mixer.update(dt * 1.9);
+        // 再生尺の短縮率と同期させ、脚だけがゆっくり見えたり早送りに見えたりするのを防ぐ。
+        for (const mixer of this.mixers) mixer.update(dt * 1.9 * PLAYBACK_SPEED);
 
         // 雲をゆっくり流す
         for (const cloud of this.clouds) {
