@@ -776,20 +776,21 @@ export class Race3DRenderer {
         this.visionTexture = new THREE.CanvasTexture(this.visionCanvas);
         this.visionTexture.colorSpace = THREE.SRGBColorSpace;
         const visionFrame = new THREE.Mesh(
-            new THREE.BoxGeometry(20.8, 12.4, 0.8),
+            new THREE.BoxGeometry(14.8, 8.8, 0.65),
             new THREE.MeshStandardMaterial({ color: 0x161b22, roughness: 0.36, metalness: 0.72 })
         );
-        visionFrame.position.set(24, 7.2, -4);
+        // スタート／ゴール（手前側）の反対にある内馬場奥へ置き、走行レーンとの重なりを避ける。
+        visionFrame.position.set(0, 5.4, -25);
         this.root.add(visionFrame);
         const vision = new THREE.Mesh(
-            new THREE.PlaneGeometry(19.2, 10.8),
+            new THREE.PlaneGeometry(13.6, 7.6),
             new THREE.MeshBasicMaterial({ map: this.visionTexture })
         );
-        vision.position.set(24, 7.2, -3.55);
+        vision.position.set(0, 5.4, -24.64);
         this.root.add(vision);
-        for (const x of [18, 30]) {
-            const support = new THREE.Mesh(new THREE.BoxGeometry(0.7, 7, 0.7), new THREE.MeshStandardMaterial({ color: 0x30343b, metalness: 0.65 }));
-            support.position.set(x, 3.5, -4);
+        for (const x of [-4.6, 4.6]) {
+            const support = new THREE.Mesh(new THREE.BoxGeometry(0.55, 5.4, 0.55), new THREE.MeshStandardMaterial({ color: 0x30343b, metalness: 0.65 }));
+            support.position.set(x, 2.7, -25);
             this.root.add(support);
         }
         this._paintVision(this.horses.map((_, i) => i).slice(0, 3));
