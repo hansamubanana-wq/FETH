@@ -6,6 +6,7 @@ export function showScreen(id) {
     const stadiumScreens = new Set(["screen-race", "screen-result"]);
     const scene = paddockScreens.has(id) ? "paddock" : stadiumScreens.has(id) ? "stadium" : "home";
     document.body.dataset.scene = scene;
+    document.body.dataset.landscapeRequired = String(id === "screen-pick" || id === "screen-race");
 }
 
 // 32bit 乱数シードを作る（ローカルやホストのレース生成用）。

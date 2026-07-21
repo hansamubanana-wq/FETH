@@ -4,6 +4,7 @@
   "description": "お金をかけない、ゲーム内コインの競馬ゲーム",
   "start_url": "./",
   "display": "standalone",
+  "orientation": "landscape",
   "background_color": "#080a0d",
   "theme_color": "#0b1016",
   "icons": [

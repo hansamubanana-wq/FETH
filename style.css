@@ -63,6 +63,45 @@ body {
 .gold-spinner { width: 42px; height: 42px; border: 3px solid rgba(255, 211, 77, .2); border-top-color: #ffd34d; border-radius: 50%; animation: goldSpin .8s linear infinite; }
 @keyframes goldSpin { to { transform: rotate(360deg); } }
 
+/* 馬選択・レース中にスマホを縦持ちしている場合だけ横向きを案内する */
+.rotate-device-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    min-height: 100svh;
+    min-height: 100dvh;
+    padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+        max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+    place-content: center;
+    justify-items: center;
+    text-align: center;
+    background: radial-gradient(circle at 50% 42%, #293750, #070d17 70%);
+}
+
+.rotate-device-overlay h2 { margin: 24px 0 8px; color: #ffe38b; font-size: clamp(1.35rem, 6vw, 2rem); }
+.rotate-device-overlay p { max-width: 24em; margin: 0; color: var(--muted); line-height: 1.7; }
+.rotate-device-icon {
+    position: relative;
+    width: 82px;
+    height: 122px;
+    border: 4px solid #ffd34d;
+    border-radius: 14px;
+    box-shadow: 0 0 28px rgba(255, 204, 51, .35), inset 0 0 18px rgba(255, 204, 51, .08);
+    animation: rotateDevice 1.8s ease-in-out infinite;
+}
+.rotate-device-icon span { position: absolute; bottom: 7px; left: 50%; width: 9px; height: 9px; transform: translateX(-50%); border-radius: 50%; background: #ffd34d; }
+@keyframes rotateDevice {
+    0%, 18% { transform: rotate(0deg); }
+    55%, 82% { transform: rotate(90deg); }
+    100% { transform: rotate(0deg); }
+}
+
+@media (pointer: coarse) and (orientation: portrait) and (max-width: 760px) {
+    body[data-landscape-required="true"] { overflow: hidden; }
+    body[data-landscape-required="true"] .rotate-device-overlay { display: grid; }
+}
+
 .race-loading {
     position: absolute;
     z-index: 8;
@@ -884,6 +923,58 @@ button.ghost:active {
     cursor: pointer;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+/* スマホ横画面: 4列の馬カードと、全画面3D上に重ねる左右HUD */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 760px) {
+    html, body { min-height: 100svh; min-height: 100dvh; }
+    #app { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+    #screen-pick .horse-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    #screen-pick .horse-pick { padding: 10px 6px; }
+    #screen-pick .horse-portrait-wrap { width: clamp(58px, 8vw, 82px); }
+    #screen-pick .bet-action-panel { width: 100%; max-width: none; }
+
+    #screen-race {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        width: 100vw;
+        height: 100svh;
+        height: 100dvh;
+        padding: 0;
+        overflow: hidden;
+        background: #07101a;
+    }
+    #screen-race .race-stage { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; }
+    #screen-race #track { border-radius: 0; }
+    #screen-race #race-status {
+        position: absolute;
+        z-index: 12;
+        top: max(4px, env(safe-area-inset-top));
+        left: 50%;
+        margin: 0;
+        transform: translateX(-50%);
+        font-size: clamp(1.1rem, 4vh, 1.7rem);
+        pointer-events: none;
+    }
+    #screen-race > .exit-btn { z-index: 14; top: max(6px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); }
+    #screen-race .live-panels { position: absolute; inset: 0; z-index: 10; display: contents; margin: 0; pointer-events: none; }
+    #screen-race .live-box {
+        position: absolute;
+        width: clamp(150px, 21vw, 220px);
+        max-height: 43vh;
+        overflow: hidden;
+        padding: 7px 9px;
+        border-radius: 9px;
+        background: rgba(5, 12, 21, .72);
+        font-size: .76rem;
+    }
+    #screen-race .live-box:nth-child(1) { left: max(6px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top)); }
+    #screen-race .live-box:nth-child(2) { right: max(6px, env(safe-area-inset-right)); top: max(54px, calc(env(safe-area-inset-top) + 46px)); }
+    #screen-race .live-box:nth-child(3) { right: max(6px, env(safe-area-inset-right)); bottom: max(6px, env(safe-area-inset-bottom)); }
+    #screen-race .live-box h4 { margin-bottom: 4px; font-size: .72rem; }
+    #screen-race .live-standings li, #screen-race .live-pl li, #screen-race .ability-log { padding-top: 2px; padding-bottom: 2px; font-size: .72rem; }
+    #screen-race .finish-telops { top: max(42px, calc(env(safe-area-inset-top) + 36px)); width: min(48%, 390px); }
 }
 
 .balance-bar::before,
