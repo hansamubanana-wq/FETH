@@ -13,6 +13,7 @@ const cur = {
     tickets: [],
     spent: 0,
     reviveMode: false,
+    phase: "idle", // idle -> type -> horses -> amount
 };
 
 const remaining = () => cur.balance - cur.spent;
@@ -30,6 +31,7 @@ export function initBetUI() {
             const v = btn.dataset.bet;
             if (v === "half") cur.amount = Math.floor(remaining() / 2);
             else if (v === "all") cur.amount = remaining();
+            else cur.amount = Number(v);
             clampBet(); updateAmount(); renderSelection();
         });
     });
@@ -46,6 +48,8 @@ export function initBetUI() {
         if (cur.selection.length === cur.type.nPick) placeTicket([...cur.selection]);
     });
     document.getElementById("skip-bet").addEventListener("click", finishBetting);
+    document.getElementById("bet-cancel").addEventListener("click", resetFlow);
+    document.getElementById("bet-back").addEventListener("click", goBack);
 }
 
 // パネルを開く。
@@ -54,9 +58,8 @@ export function startBetPanel({ engine, balance, onComplete, reviveMode = false 
     cur.balance = balance;
     cur.onComplete = onComplete;
     cur.reviveMode = reviveMode;
-    cur.type = reviveMode
-        ? engine.betTypes.find((t) => t.key === "win") || engine.betTypes[0]
-        : engine.betTypes[0];
+    cur.type = null;
+    cur.phase = "idle";
     cur.selection = [];
     cur.tickets = [];
     cur.spent = 0;
@@ -100,19 +103,16 @@ function renderTabs() {
     for (const t of types) {
         const btn = document.createElement("button");
         btn.innerHTML = `<span class="bettype-icon" aria-hidden="true">${icons[t.key] || "◇"}</span><span>${t.label}</span>`;
-        btn.className = t === cur.type ? "active" : "";
         btn.addEventListener("click", () => {
-            cur.type = t; cur.selection = [];
+            cur.type = t;
+            cur.phase = t.nPick === 1 ? "amount" : "horses";
             renderTabs(); renderHorses(); renderSelection();
         });
         tabs.appendChild(btn);
     }
     document.getElementById("bettype-desc").textContent = cur.reviveMode
         ? "破産中の特別ルール：単勝を的中できれば3000コインで復活できます。外れても追加の支払いはありません。"
-        : cur.type.desc;
-    document.getElementById("pick-instruction").textContent = cur.reviveMode
-        ? "復活をかけて1着になる馬を選んでください"
-        : `${cur.type.nPick}頭選んでください`;
+        : "選んだ馬を起点に、購入する馬券の種類を決めます。";
 }
 function meter(label, v, valText = "", cls = "") {
     const pct = Math.round(Math.max(0, Math.min(1, v)) * 100);
@@ -149,7 +149,7 @@ function renderHorses() {
         // どの賭け式でも各馬にオッズを表示する。
         // 1頭選び（単勝/複勝）はその式のオッズ、複数頭の式は人気の目安として単勝オッズを出す。
         let oddsLine;
-        if (type.nPick === 1) {
+        if (type?.nPick === 1) {
             oddsLine = `<div class="odds">${type.label} ${cur.engine.oddsFor(type.key, [h.id])}倍</div>`;
         } else {
             oddsLine = `<div class="odds">単勝 ${cur.engine.oddsFor("win", [h.id])}倍</div>`;
@@ -183,10 +183,23 @@ function renderHorses() {
 }
 
 function tapHorse(horse) {
+    if (cur.phase === "idle") {
+        cur.selection = [horse.id];
+        if (cur.reviveMode) {
+            cur.type = cur.engine.betTypes.find((t) => t.key === "win") || cur.engine.betTypes[0];
+            cur.phase = "amount";
+        } else {
+            cur.phase = "type";
+        }
+        renderTabs(); renderHorses(); renderSelection();
+        return;
+    }
+    if (cur.phase !== "horses") return;
     const type = cur.type;
     const pos = cur.selection.indexOf(horse.id);
     if (pos >= 0) cur.selection.splice(pos, 1);
     else if (cur.selection.length < type.nPick) cur.selection.push(horse.id);
+    if (cur.selection.length === type.nPick) cur.phase = "amount";
     renderHorses();
     renderSelection();
 }
@@ -196,21 +209,40 @@ function renderSelection() {
     const bar = document.getElementById("selection-bar");
     const preview = document.getElementById("odds-preview");
     const confirm = document.getElementById("confirm-bet");
-    const summary = document.getElementById("current-bet-summary");
+    const panel = document.getElementById("bet-action-panel");
+    const typePanel = document.getElementById("bettype-panel");
+    const amountPanel = document.getElementById("amount-panel");
+    const instruction = document.getElementById("pick-instruction");
     const names = cur.selection.map((id) => {
         const h = cur.engine.horses.find((x) => x.id === id);
         return `${h.id + 1}.${h.name}`;
     });
-    const joiner = type.ordered ? " → " : " ・ ";
-    const left = type.nPick - cur.selection.length;
-    bar.textContent = left > 0
-        ? `${type.nPick}頭選んでください（あと${left}頭）`
-        : `${type.label}の馬を選択しました`;
-    summary.textContent = names.length ? `${type.label}｜${names.join(joiner)}` : `${type.label}｜馬を選んでください`;
+    if (cur.phase === "idle") {
+        panel.classList.add("hidden");
+        bar.classList.add("hidden");
+        instruction.textContent = cur.reviveMode ? "↓ 復活をかける馬をタップ" : "↓ 最初に軸となる馬をタップ";
+        return;
+    }
+    panel.classList.remove("hidden");
+    typePanel.classList.toggle("hidden", cur.phase !== "type");
+    amountPanel.classList.toggle("hidden", cur.phase !== "amount");
+    amountPanel.classList.toggle("revive-mode", cur.reviveMode);
+    amountPanel.querySelector("h3").textContent = cur.reviveMode ? "復活チャレンジの内容確認" : "最後に賭け金を決める";
+    bar.classList.remove("hidden");
+    const joiner = type?.ordered ? " → " : " ・ ";
+    const left = type ? type.nPick - cur.selection.length : 0;
+    if (cur.phase === "type") bar.textContent = `選択馬 [${cur.selection[0] + 1}] → 賭け式を選択中`;
+    else if (cur.phase === "horses") {
+        const next = type.ordered ? `${cur.selection.length + 1}着になる馬` : `あと${left}頭`;
+        bar.textContent = `${type.label}: ${names.join(joiner)} → ${next}を選択中`;
+    } else bar.textContent = `${type.label}: ${names.join(joiner)} → 賭け金を入力`;
+    instruction.textContent = cur.phase === "horses"
+        ? (type.ordered ? `↓ ${cur.selection.length + 1}着になる馬を選んでください` : `↓ あと${left}頭選んでください`)
+        : cur.phase === "type" ? "選んだ馬の賭け式を決めてください" : "内容を確認して賭け金を決めてください";
 
-    const selectionReady = cur.selection.length === type.nPick;
+    const selectionReady = type && cur.selection.length === type.nPick;
     const amountReady = cur.reviveMode || (cur.amount > 0 && cur.amount <= remaining());
-    if (selectionReady) {
+    if (selectionReady && cur.phase === "amount") {
         const odds = cur.engine.oddsFor(type.key, cur.selection);
         const payout = cur.reviveMode ? 3000 : Math.floor(cur.amount * odds);
         preview.innerHTML = cur.reviveMode
@@ -222,19 +254,28 @@ function renderSelection() {
         preview.classList.add("hidden");
     }
     confirm.disabled = !(selectionReady && amountReady);
-    confirm.textContent = !selectionReady
-        ? `馬をあと${left}頭選んでください`
-        : !amountReady ? "金額を入力してください" : "この内容で賭ける";
-    updateSteps(selectionReady);
+    confirm.textContent = !amountReady ? "金額を入力してください" : "この内容で賭ける";
 }
 
-function updateSteps(selectionReady) {
-    const step = selectionReady ? 3 : 2;
-    document.querySelectorAll("#bet-steps li").forEach((el) => {
-        const n = Number(el.dataset.step);
-        el.classList.toggle("active", n === step);
-        el.classList.toggle("done", n < step);
-    });
+function resetFlow() {
+    cur.type = null;
+    cur.selection = [];
+    cur.phase = "idle";
+    renderHorses(); renderSelection();
+}
+
+function goBack() {
+    if (cur.phase === "amount" && cur.type?.nPick > 1) {
+        cur.selection.pop();
+        cur.phase = "horses";
+    } else if (cur.phase === "horses") {
+        cur.type = null;
+        cur.phase = "type";
+    } else {
+        resetFlow();
+        return;
+    }
+    renderTabs(); renderHorses(); renderSelection();
 }
 function placeTicket(sel) {
     if (!cur.reviveMode && (cur.amount <= 0 || cur.amount > remaining())) return;
@@ -246,6 +287,8 @@ function placeTicket(sel) {
     }
     cur.spent += cur.amount;
     cur.selection = [];
+    cur.type = null;
+    cur.phase = "idle";
     cur.amount = Math.min(BET_STEP, remaining());
     updateAmount();
     renderHorses();
