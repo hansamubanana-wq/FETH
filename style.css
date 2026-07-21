@@ -1306,7 +1306,7 @@ button.ghost:active {
     position: relative;
     width: min(100%, 720px);
     min-height: clamp(190px, 34vw, 300px);
-    margin: 12px auto -70px;
+    margin: 12px auto 28px;
     overflow: hidden;
     border: 1px solid rgba(255, 218, 112, 0.55);
     border-radius: 20px;
@@ -1350,7 +1350,7 @@ button.ghost:active {
     position: relative;
     z-index: 2;
     max-width: 520px;
-    margin: 16px auto;
+    margin: 0 auto 16px;
     padding: 0;
     list-style: none;
     display: grid;
@@ -1439,7 +1439,7 @@ button.ghost:active {
     .result-list li:nth-child(-n + 3) { padding: 10px 5px; min-height: 148px; font-size: 0.84rem; }
     .result-list li:nth-child(1) { min-height: 174px; }
     .result-list li:nth-child(-n + 3) small { display: none; }
-    .victory-keyart { margin-bottom: -44px; min-height: 180px; }
+    .victory-keyart { margin-bottom: 20px; min-height: 180px; }
     .victory-horse { width: 132px; }
 }
 
