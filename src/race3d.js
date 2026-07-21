@@ -37,10 +37,12 @@ export class Race3DRenderer {
         this.flashClock = 0;
         // 事前計算済みレースデータから決めるため、同じレースは全端末で同じ空になる。
         this.skyTheme = Math.floor(data.finishTime.reduce((sum, value) => sum + value, 0) * 1000) % 3;
+        this.timeOfDay = ["day", "sunset", "night"][this.skyTheme];
 
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x8cc3e3);
-        this.scene.fog = new THREE.Fog(0xa9d4ea, 110, 260);
+        const fogColors = [0xa9d4ea, 0x8a6674, 0x10182d];
+        this.scene.fog = new THREE.Fog(fogColors[this.skyTheme], 110, 260);
         this.clouds = [];
         this.flags = [];
         this.confetti = null;
@@ -315,11 +317,19 @@ export class Race3DRenderer {
     }
 
     _buildWorld() {
-        const evening = this.skyTheme > 0;
-        const hemi = new THREE.HemisphereLight(evening ? 0xffd0a6 : 0xfff3d6, evening ? 0x172d32 : 0x27452b, evening ? 1.75 : 2.1);
+        const evening = this.timeOfDay === "sunset";
+        const night = this.timeOfDay === "night";
+        const hemi = new THREE.HemisphereLight(
+            night ? 0x8ea8dd : (evening ? 0xffd0a6 : 0xfff3d6),
+            night ? 0x071016 : (evening ? 0x172d32 : 0x27452b),
+            night ? 0.72 : (evening ? 1.75 : 2.1)
+        );
         this.scene.add(hemi);
 
-        const sun = new THREE.DirectionalLight(evening ? 0xffb06a : 0xffffff, evening ? 2.25 : 2.6);
+        const sun = new THREE.DirectionalLight(
+            night ? 0x9bbcff : (evening ? 0xffb06a : 0xffffff),
+            night ? 0.55 : (evening ? 2.25 : 2.6)
+        );
         sun.position.set(-46, 88, 42);
         sun.castShadow = true;
         sun.shadow.mapSize.set(this.isMobile ? 512 : 2048, this.isMobile ? 512 : 2048);
@@ -350,6 +360,7 @@ export class Race3DRenderer {
         this._addInfield();
         this._addTrees();
         this._addFlags();
+        if (this.timeOfDay === "night") this._addNightLighting();
     }
 
     // レーン幅の実寸(ワールド単位換算前のオフセット)。馬の走行ラインと路面を一致させる
@@ -370,7 +381,7 @@ export class Race3DRenderer {
         const palettes = [
             ["#3d8ed3", "#8cc3e3", "#e3f2f9"],
             ["#182d55", "#8a5a74", "#f5b06a"],
-            ["#101b38", "#5a456c", "#e78c5d"],
+            ["#020617", "#07152f", "#18294a"],
         ];
         const palette = palettes[this.skyTheme];
         g.addColorStop(0, palette[0]);
@@ -381,6 +392,25 @@ export class Race3DRenderer {
         const tex = new THREE.CanvasTexture(canvas);
         tex.colorSpace = THREE.SRGBColorSpace;
         this.scene.background = tex;
+
+        if (this.timeOfDay === "night") {
+            const starCount = this.isMobile ? 100 : 220;
+            const positions = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount; i++) {
+                const angle = (i * 2.399963 + this.skyTheme) % (Math.PI * 2);
+                const radius = 92 + ((i * 37) % 75);
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = 36 + ((i * 29) % 62);
+                positions[i * 3 + 2] = Math.sin(angle) * radius - 28;
+            }
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+            const stars = new THREE.Points(
+                geometry,
+                new THREE.PointsMaterial({ color: 0xeaf3ff, size: 0.7, transparent: true, opacity: 0.92, fog: false })
+            );
+            this.scene.add(stars);
+        }
 
         // ゆっくり流れる雲
         const cloudTex = this._makeCloudTexture();
@@ -869,6 +899,30 @@ export class Race3DRenderer {
         }
         this.ready = true;
         this.onProgress?.(1);
+    }
+
+    _addNightLighting() {
+        const poleMat = new THREE.MeshStandardMaterial({ color: 0x303b4a, roughness: 0.45, metalness: 0.72 });
+        const lampMat = new THREE.MeshStandardMaterial({ color: 0xf3f5e8, emissive: 0xfff1bd, emissiveIntensity: 2.4 });
+        const positions = [[-67, -37], [67, -37], [-72, 36], [72, 36]];
+        positions.forEach(([x, z]) => {
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 24, 8), poleMat);
+            pole.position.set(x, 12, z);
+            this.root.add(pole);
+            const rack = new THREE.Mesh(new THREE.BoxGeometry(7.5, 1.1, 0.8), poleMat);
+            rack.position.set(x, 24, z);
+            this.root.add(rack);
+            for (let i = -2; i <= 2; i++) {
+                const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.72, 0.42), lampMat);
+                lamp.position.set(x + i * 1.35, 24, z + (z < 0 ? 0.46 : -0.46));
+                this.root.add(lamp);
+            }
+            const light = new THREE.SpotLight(0xfff0c7, this.isMobile ? 9 : 13, 130, Math.PI / 4.2, 0.7, 1.1);
+            light.position.set(x, 23.5, z);
+            light.target.position.set(x * 0.28, 0, z * 0.22);
+            light.castShadow = false;
+            this.scene.add(light, light.target);
+        });
     }
 
     _createHorses(source, animations) {
