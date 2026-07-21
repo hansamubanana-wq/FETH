@@ -17,16 +17,16 @@ function clamp(value, lo, hi) {
 function initRunner(h, rng) {
     const ability = h.ability;
     // 素の能力差を55%に圧縮。調子は正規分布を±4.5%に制限する。
-    const basePerf = 1 + (h.power - 1) * 0.55;
-    const condition = clamp(normal(rng) * 0.018, -0.045, 0.045);
+    const basePerf = 1 + (h.power - 1) * 0.45;
+    const condition = clamp(normal(rng) * 0.024, -0.060, 0.060);
     // 序盤・中盤・終盤それぞれの位置取り。合計の振れは能力差より小さい。
-    const phases = [0, 1, 2].map(() => clamp(normal(rng) * 0.010, -0.022, 0.022));
-    const staminaPlan = clamp(normal(rng) * 0.010, -0.022, 0.022);
+    const phases = [0, 1, 2].map(() => clamp(normal(rng) * 0.013, -0.030, 0.030));
+    const staminaPlan = clamp(normal(rng) * 0.013, -0.030, 0.030);
     const active = rng() < ability.proc;
     const trigger = ability.lo + rng() * (ability.hi - ability.lo);
     // 低調子・終盤の展開不利・スタミナ配分失敗がすべて重なった場合だけ明確に失速する。
-    const exhausted = condition < -0.032 && phases[2] < -0.014 &&
-        staminaPlan < -0.014 && h.style.stamina < 0.5;
+    const exhausted = condition < -0.045 && phases[2] < -0.020 &&
+        staminaPlan < -0.020 && h.style.stamina < 0.5;
     return {
         id: h.id, basePerf, condition, phases, staminaPlan, exhausted,
         style: h.style, ability, active, trigger, x: 0, done: false,
