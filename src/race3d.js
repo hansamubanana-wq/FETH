@@ -8,6 +8,10 @@ const CENTER_RX_SCALE = 0.13;
 const CENTER_RZ_SCALE = 0.16;
 const LANE_SPREAD = 0.13;
 const COAT_COLORS = [0x8b3f24, 0x5a321f, 0x3b2a24, 0xb9783f, 0x6d5141, 0xd8c8aa, 0x9b4f2e, 0x24211f];
+const HIGH_PIXEL_RATIO = 2;
+const FALLBACK_PIXEL_RATIO = 1.5;
+const FPS_SAMPLE_MS = 3000;
+const MIN_ACCEPTABLE_FPS = 30;
 
 // 動的カメラの設定
 const FULL_VIEW_HEIGHT = 64;   // コース全体が収まる視野の高さ(=最大ズームアウト)
@@ -67,9 +71,10 @@ export class Race3DRenderer {
             alpha: false,
             powerPreference: "high-performance",
         });
-        this.isMobile = matchMedia("(max-width: 760px), (pointer: coarse)").matches;
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2));
-        this.renderer.shadowMap.enabled = !this.isMobile;
+        this.qualityLevel = 0;
+        this.performanceSample = { startedAt: performance.now(), frames: 0 };
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, HIGH_PIXEL_RATIO));
+        this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -228,6 +233,7 @@ export class Race3DRenderer {
         });
 
         this.renderer.render(this.scene, this.camera);
+        this._monitorPerformance();
     }
 
     dispose() {
@@ -238,8 +244,41 @@ export class Race3DRenderer {
         this.renderer.dispose();
     }
 
+    _monitorPerformance() {
+        const now = performance.now();
+        const sample = this.performanceSample;
+        const duration = now - sample.startedAt;
+        // バックグラウンド復帰直後の長い停止は端末性能として扱わない。
+        if (duration > FPS_SAMPLE_MS * 2) {
+            sample.startedAt = now;
+            sample.frames = 0;
+            return;
+        }
+        sample.frames++;
+        if (duration < FPS_SAMPLE_MS) return;
+
+        const fps = sample.frames * 1000 / duration;
+        sample.startedAt = now;
+        sample.frames = 0;
+        if (fps < MIN_ACCEPTABLE_FPS && this.qualityLevel < 3) {
+            this._applyQualityFallback(this.qualityLevel + 1);
+        }
+    }
+
+    _applyQualityFallback(level) {
+        this.qualityLevel = level;
+        if (level === 1) {
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, FALLBACK_PIXEL_RATIO));
+            this.resize();
+        } else if (level === 2) {
+            this.renderer.shadowMap.enabled = false;
+        }
+        // level 3 は生成・更新時に砂埃、フラッシュ、紙吹雪を半数に抑える。
+        console.info(`3D quality fallback: level ${level}`);
+    }
+
     _buildRaceEffects() {
-        const count = this.isMobile ? 72 : 144;
+        const count = 144;
         const geometry = new THREE.IcosahedronGeometry(0.18, 0);
         const material = new THREE.MeshBasicMaterial({ color: 0xc8ad78, transparent: true, opacity: 0.72 });
         const mesh = new THREE.InstancedMesh(geometry, material, count);
@@ -254,9 +293,9 @@ export class Race3DRenderer {
         this.spray = { mesh, particles };
         this.root.add(mesh);
 
-        this.flashLights = Array.from({ length: this.isMobile ? 5 : 10 }, (_, i) => {
+        this.flashLights = Array.from({ length: 10 }, (_, i) => {
             const light = new THREE.PointLight(0xeaf6ff, 0, 38, 2);
-            const a = Math.PI * (0.08 + (i / (this.isMobile ? 5 : 10)) * 0.84);
+            const a = Math.PI * (0.08 + (i / 10) * 0.84);
             light.position.set(Math.cos(a) * 54, 12 + (i % 3) * 4, Math.sin(a) * 31);
             light.userData.phase = i * 0.73;
             this.scene.add(light);
@@ -272,12 +311,14 @@ export class Race3DRenderer {
     _updateRaceEffects(distances, leader, elapsed, dt) {
         const progress = Math.max(...distances) / TRACK_LEN;
         const leaders = distances.map((d, i) => ({ d, i })).sort((a, b) => b.d - a.d).slice(0, 3);
-        this.sprayAccumulator += dt * (this.isMobile ? 24 : 48);
+        const particleScale = this.qualityLevel >= 3 ? 0.5 : 1;
+        const sprayCount = Math.max(1, Math.floor(this.spray.particles.length * particleScale));
+        this.sprayAccumulator += dt * 48 * particleScale;
         while (this.sprayAccumulator >= 1 && progress < 1.02) {
             this.sprayAccumulator -= 1;
             const runner = leaders[this.sprayCursor % leaders.length];
             const pose = this._pose(runner.d, this.layout.off[runner.i]);
-            const p = this.spray.particles[this.sprayCursor++ % this.spray.particles.length];
+            const p = this.spray.particles[this.sprayCursor++ % sprayCount];
             const back = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), pose.yaw);
             p.active = true;
             p.life = p.maxLife = 0.42 + Math.random() * 0.28;
@@ -304,7 +345,8 @@ export class Race3DRenderer {
         this.flashClock += dt;
         this.flashLights.forEach((light, i) => {
             const pulse = Math.sin(elapsed * 18 + light.userData.phase * 9) > 0.965;
-            light.intensity = inFinalStraight && pulse ? (this.isMobile ? 5 : 8) : 0;
+            const enabled = this.qualityLevel < 3 || i % 2 === 0;
+            light.intensity = enabled && inFinalStraight && pulse ? 8 : 0;
         });
 
         const winner = this.data.order?.[0] ?? leader;
@@ -336,7 +378,7 @@ export class Race3DRenderer {
         );
         sun.position.set(-46, 88, 42);
         sun.castShadow = true;
-        sun.shadow.mapSize.set(this.isMobile ? 512 : 2048, this.isMobile ? 512 : 2048);
+        sun.shadow.mapSize.set(2048, 2048);
         sun.shadow.bias = -0.0003;
         sun.shadow.camera.left = -90;
         sun.shadow.camera.right = 90;
@@ -398,7 +440,7 @@ export class Race3DRenderer {
         this.scene.background = tex;
 
         if (this.timeOfDay === "night") {
-            const starCount = this.isMobile ? 100 : 220;
+            const starCount = 220;
             const positions = new Float32Array(starCount * 3);
             for (let i = 0; i < starCount; i++) {
                 const angle = (i * 2.399963 + this.skyTheme) % (Math.PI * 2);
@@ -892,7 +934,7 @@ export class Race3DRenderer {
 
     // 1着馬がゴールした瞬間に紙吹雪を舞わせる
     _spawnConfetti() {
-        const count = this.isMobile ? 260 : 420;
+        const count = this.qualityLevel >= 3 ? 210 : 420;
         const rzC = this.layout.ry * CENTER_RZ_SCALE;
         const geo = new THREE.PlaneGeometry(0.6, 0.85);
         const mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), count);
@@ -1015,7 +1057,7 @@ export class Race3DRenderer {
                 lamp.position.set(x + i * 1.35, 24, z + (z < 0 ? 0.46 : -0.46));
                 this.root.add(lamp);
             }
-            const light = new THREE.SpotLight(0xfff0c7, this.isMobile ? 9 : 13, 130, Math.PI / 4.2, 0.7, 1.1);
+            const light = new THREE.SpotLight(0xfff0c7, 13, 130, Math.PI / 4.2, 0.7, 1.1);
             light.position.set(x, 23.5, z);
             light.target.position.set(x * 0.28, 0, z * 0.22);
             light.castShadow = false;
