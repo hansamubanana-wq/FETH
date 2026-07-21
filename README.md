@@ -7,6 +7,7 @@
 ## 主な機能
 
 - 8頭立てのレースシミュレーション
+- 実力を中心に、調子・展開・スタミナ配分で僅差の番狂わせが起こる決定論的レースモデル
 - 単勝、複勝、馬連、馬単、ワイド、3連複、3連単のベット
 - ローカル複数人プレイ
 - Firebase Firestore を使ったオンライン部屋作成・参加
@@ -78,14 +79,23 @@ py -m http.server 5173
 │   ├── local.js
 │   ├── online.js
 │   ├── race.js
+│   ├── race-sim.js
 │   ├── race3d.js
 │   ├── raceui.js
 │   └── ...
 ├── firestore.rules
 ├── index.html
 ├── manifest.webmanifest
+├── scripts/
+│   └── monte-carlo-balance.mjs
 ├── style.css
 └── README.md
+```
+
+レースバランスの5,000レース検証は次のコマンドで再実行できます。
+
+```bash
+node scripts/monte-carlo-balance.mjs
 ```
 
 ## 今後の改善案
