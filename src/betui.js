@@ -226,6 +226,8 @@ function renderSelection() {
         typePanel.classList.add("hidden");
         amountPanel.classList.add("hidden");
         flowActions.classList.add("hidden");
+        // プレースホルダと同じ文言が3重に出るので、未選択のうちは確定ドックごと隠す
+        document.getElementById("bet-confirm-dock").classList.add("hidden");
         bar.textContent = "馬を選んでください";
         confirm.disabled = true;
         confirm.textContent = "馬を選んでください";
@@ -234,6 +236,7 @@ function renderSelection() {
     }
     panel.dataset.phase = cur.phase;
     placeholder.classList.add("hidden");
+    document.getElementById("bet-confirm-dock").classList.remove("hidden");
     flowActions.classList.remove("hidden");
     typePanel.classList.toggle("hidden", cur.phase !== "type");
     amountPanel.classList.toggle("hidden", cur.phase !== "amount");

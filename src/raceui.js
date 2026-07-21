@@ -241,9 +241,9 @@ export function renderResult(orderedHorses, payoutRows, standings, buttons) {
         if (i === 0) li.classList.add("winner");
         li.style.setProperty("--result-delay", `${i * 75}ms`);
         li.innerHTML = `
-            ${i === 0 ? '<span class="winner-rays" aria-hidden="true"></span><span class="winner-trophy" aria-label="優勝">🏆</span>' : ""}
+            ${i === 0 ? '<span class="winner-trophy" aria-label="優勝">🏆</span>' : ""}
             <span class="rank">${medals[i] || i + 1}</span>
-            <img class="result-horse-portrait" src="assets/art/horses/horse${h.id + 1}.png" alt="" width="52" height="52">
+            <span class="result-portrait-wrap">${i === 0 ? '<span class="winner-rays" aria-hidden="true"></span>' : ""}<img class="result-horse-portrait" src="assets/art/horses/horse${h.id + 1}.png" alt="" width="52" height="52"></span>
             <span>${h.id + 1}. ${h.name} <small style="color:var(--muted)">(${h.style.label}${h.ability ? " ⚡" + h.ability.label : ""})</small></span>
         `;
         list.appendChild(li);
