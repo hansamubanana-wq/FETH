@@ -134,9 +134,11 @@ export class Race3DRenderer {
 
         const needWidth = (maxR - minR) + VIEW_MARGIN_X * 2;
         const needHeight = (maxU - minU) + VIEW_MARGIN_Y * 2;
+        const progress = Math.max(...distances) / TRACK_LEN;
+        const finalStraight = THREE.MathUtils.smoothstep(progress, 0.72, 0.9) * (1 - THREE.MathUtils.smoothstep(progress, 0.99, 1.04));
         const desiredHeight = Math.min(
             FULL_VIEW_HEIGHT,
-            Math.max(MIN_VIEW_HEIGHT, needHeight, needWidth / this.aspect)
+            Math.max(MIN_VIEW_HEIGHT - finalStraight * 3, needHeight, needWidth / this.aspect)
         );
 
         // 馬群の中心をスクリーン軸上の中点から復元(視線方向の成分は写りに影響しない)
@@ -149,7 +151,13 @@ export class Race3DRenderer {
         this.viewTarget.lerp(desiredTarget, posK);
         this.viewHeight += (desiredHeight - this.viewHeight) * zoomK;
 
-        this.camera.position.copy(this.viewTarget).add(this.cameraOffset);
+        // 最終直線だけ視点を低く近づける。フラスタム寸法は全馬の投影範囲から先に算出するため、
+        // 迫力を増しても先頭・最後尾と頭上表示は必ず画面内に残る。
+        const cinematicOffset = new THREE.Vector3(0, 43, 62);
+        const wantedOffset = this.cameraOffset.clone().lerp(cinematicOffset, finalStraight);
+        this.cameraOffsetCurrent.lerp(wantedOffset, 1 - Math.exp(-2.8 * dt));
+
+        this.camera.position.copy(this.viewTarget).add(this.cameraOffsetCurrent);
         this.camera.up.set(0, 0, -1);
         this.camera.lookAt(this.viewTarget);
         this._applyFrustum();
@@ -185,6 +193,7 @@ export class Race3DRenderer {
         this._updateVision(distances, elapsed);
         this._updateStartGate(elapsed);
         this._updateRaceEffects(distances, leader, elapsed, dt);
+        this._updateSpeedLines(distances, leader, elapsed);
 
         // ゴールした馬はラインで急停止せず、先着ほど遠くまで流して走り抜ける
         const effDist = distances.map((d, i) => {
@@ -297,6 +306,18 @@ export class Race3DRenderer {
         this.spray = { mesh, particles };
         this.root.add(mesh);
 
+        // 馬の進行方向と逆へ流れる短い線。ポストエフェクトを使わない軽量な疑似モーションブラー。
+        const lineCount = 54;
+        const linePositions = new Float32Array(lineCount * 2 * 3);
+        const lineGeometry = new THREE.BufferGeometry();
+        lineGeometry.setAttribute("position", new THREE.BufferAttribute(linePositions, 3));
+        const lineMaterial = new THREE.LineBasicMaterial({
+            color: 0xf7e4bb, transparent: true, opacity: 0.22, depthWrite: false,
+        });
+        this.speedLines = new THREE.LineSegments(lineGeometry, lineMaterial);
+        this.speedLines.frustumCulled = false;
+        this.root.add(this.speedLines);
+
         this.flashLights = Array.from({ length: 10 }, (_, i) => {
             const light = new THREE.PointLight(0xeaf6ff, 0, 38, 2);
             const a = Math.PI * (0.08 + (i / 10) * 0.84);
@@ -317,7 +338,8 @@ export class Race3DRenderer {
         const leaders = distances.map((d, i) => ({ d, i })).sort((a, b) => b.d - a.d).slice(0, 3);
         const particleScale = this.qualityLevel >= 3 ? 0.5 : 1;
         const sprayCount = Math.max(1, Math.floor(this.spray.particles.length * particleScale));
-        this.sprayAccumulator += dt * 48 * particleScale;
+        const speedFactor = PLAYBACK_SPEED * (0.82 + Math.min(1, progress) * 0.3);
+        this.sprayAccumulator += dt * 48 * speedFactor * particleScale;
         while (this.sprayAccumulator >= 1 && progress < 1.02) {
             this.sprayAccumulator -= 1;
             const runner = leaders[this.sprayCursor % leaders.length];
@@ -327,7 +349,7 @@ export class Race3DRenderer {
             p.active = true;
             p.life = p.maxLife = 0.42 + Math.random() * 0.28;
             p.pos.copy(pose.position).addScaledVector(back, -1.35).add(new THREE.Vector3((Math.random() - 0.5) * 0.9, 0.18, (Math.random() - 0.5) * 0.9));
-            p.vel.copy(back).multiplyScalar(-2.5 - Math.random() * 2).add(new THREE.Vector3((Math.random() - 0.5) * 1.5, 1.2 + Math.random() * 1.6, (Math.random() - 0.5) * 1.5));
+            p.vel.copy(back).multiplyScalar((-2.5 - Math.random() * 2) * speedFactor).add(new THREE.Vector3((Math.random() - 0.5) * 1.5, 1.2 + Math.random() * 1.6, (Math.random() - 0.5) * 1.5));
             p.scale = 0.65 + Math.random() * 1.2;
         }
         const dummy = new THREE.Object3D();
@@ -364,6 +386,29 @@ export class Race3DRenderer {
         } else {
             this.winnerSpot.intensity = 0;
         }
+    }
+
+    _updateSpeedLines(distances, leader, elapsed) {
+        if (!this.speedLines) return;
+        const progress = Math.max(...distances) / TRACK_LEN;
+        const pose = this._pose(distances[leader], this.layout.off[leader]);
+        const tangent = new THREE.Vector3(Math.sin(pose.yaw), 0, Math.cos(pose.yaw));
+        const side = new THREE.Vector3(tangent.z, 0, -tangent.x);
+        const positions = this.speedLines.geometry.attributes.position.array;
+        const count = positions.length / 6;
+        for (let i = 0; i < count; i++) {
+            const phase = (i * 0.61803398875 + elapsed * (0.72 + (i % 5) * 0.08)) % 1;
+            const along = (phase - 0.5) * 56;
+            const lateral = (((i * 37) % count) / count - 0.5) * 48;
+            const height = 0.15 + ((i * 17) % 13) * 0.08;
+            const start = pose.position.clone().addScaledVector(tangent, along).addScaledVector(side, lateral);
+            start.y = height;
+            const end = start.clone().addScaledVector(tangent, -(1.2 + (i % 4) * 0.65) * PLAYBACK_SPEED);
+            positions.set([start.x, start.y, start.z, end.x, end.y, end.z], i * 6);
+        }
+        this.speedLines.geometry.attributes.position.needsUpdate = true;
+        this.speedLines.visible = progress > 0.04 && progress < 1.02;
+        this.speedLines.material.opacity = 0.12 + Math.min(1, progress) * 0.16;
     }
 
     _buildWorld() {
