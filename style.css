@@ -598,16 +598,28 @@ button.ghost:active {
 }
 
 /* 馬を起点にしたベットフロー */
-.selection-bar {
+.bet-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+    align-items: start;
+    gap: 24px;
+    margin-top: 18px;
+}
+
+.bet-horse-column { min-width: 0; }
+
+.bet-sidebar {
     position: sticky;
-    top: 6px;
-    z-index: 20;
-    width: fit-content;
-    max-width: min(92vw, 720px);
-    margin: 10px auto;
-    padding: 8px 14px;
+    top: 12px;
+    min-width: 0;
+}
+
+.selection-bar {
+    width: 100%;
+    margin: 0 0 10px;
+    padding: 9px 12px;
     border: 1px solid rgba(255, 204, 51, 0.25);
-    border-radius: 999px;
+    border-radius: 12px;
     background: rgba(9, 18, 31, 0.94);
     backdrop-filter: blur(10px);
     color: var(--accent);
@@ -617,13 +629,23 @@ button.ghost:active {
 }
 
 .bet-action-panel {
-    width: min(100%, 720px);
-    margin: 16px auto 0;
-    padding: 18px;
+    width: 100%;
+    margin: 0;
+    padding: 16px;
     border: 1px solid rgba(255, 215, 92, .5);
     border-radius: 18px;
     background: rgba(12, 22, 37, .97);
     box-shadow: 0 16px 40px rgba(0, 0, 0, .38);
+}
+
+.bet-panel-placeholder {
+    display: grid;
+    min-height: 150px;
+    margin: 0;
+    place-items: center;
+    color: var(--muted);
+    font-weight: 700;
+    text-align: center;
 }
 
 .bet-action-panel h3 {
@@ -634,7 +656,7 @@ button.ghost:active {
 
 .bettype-tabs {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
 }
 
@@ -692,17 +714,18 @@ button.ghost:active {
     color: var(--accent);
 }
 
-.bet-action-panel .counter { max-width: 360px; margin: 10px auto 0; }
-.bet-action-panel .bet-quick { max-width: 520px; margin: 0 auto; grid-template-columns: repeat(5, 1fr); }
-.bet-action-panel .primary { width: 100%; max-width: 420px; margin: 10px auto 0; display: block; }
+.bet-action-panel .counter { max-width: 100%; margin: 10px auto 0; }
+.bet-action-panel .bet-quick { max-width: 100%; margin: 0 auto; grid-template-columns: repeat(3, 1fr); }
+.bet-action-panel .primary { width: 100%; margin: 0; display: block; }
 .bet-action-panel .primary:disabled { opacity: .48; cursor: not-allowed; filter: grayscale(.35); }
 .bet-flow-actions { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
 .bet-flow-actions .ghost { margin: 0; padding: 9px 13px; font-size: .86rem; }
+.bet-confirm-dock { margin-top: 14px; }
 .revive-mode .counter, .revive-mode .bet-quick { display: none; }
 
 .purchased-bets {
-    max-width: 600px;
-    margin: 24px auto 0;
+    max-width: none;
+    margin: 14px 0 0;
     padding: 16px;
     border-top: 1px solid rgba(159, 179, 207, .28);
     background: rgba(10, 18, 30, .42);
@@ -711,18 +734,6 @@ button.ghost:active {
 
 .purchased-bets h3 { margin: 0 0 8px; color: var(--muted); font-size: 1rem; text-align: center; }
 .purchased-bets #skip-bet { margin-top: 12px; }
-
-@media (max-width: 680px) {
-    .bet-action-panel {
-        position: sticky;
-        z-index: 25;
-        bottom: 4px;
-        padding: 14px;
-        border-radius: 18px 18px 10px 10px;
-        box-shadow: 0 -10px 32px rgba(0, 0, 0, .5);
-    }
-    .bettype-tabs { grid-template-columns: repeat(2, 1fr); }
-}
 
 @media (max-width: 430px) {
     .bet-action-panel .bet-quick { grid-template-columns: repeat(3, 1fr); }

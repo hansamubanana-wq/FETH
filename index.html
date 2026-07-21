@@ -217,44 +217,53 @@
                 <input id="player-name" type="text" maxlength="10" placeholder="プレイヤー1">
             </label>
 
-            <div id="selection-bar" class="selection-bar hidden" role="status"></div>
-            <p class="subtitle" id="pick-instruction">↓ 最初に軸となる馬をタップ</p>
-            <div id="horse-choices" class="horse-grid"></div>
+            <div class="bet-layout">
+                <div class="bet-horse-column">
+                    <p class="subtitle" id="pick-instruction">↓ 最初に軸となる馬をタップ</p>
+                    <div id="horse-choices" class="horse-grid"></div>
+                </div>
 
-            <section id="bet-action-panel" class="bet-action-panel hidden" aria-live="polite">
-                <div id="bettype-panel">
-                    <h3>賭け式を選択</h3>
-                    <div id="bettype-tabs" class="bettype-tabs"></div>
-                    <p id="bettype-desc" class="bettype-desc"></p>
-                </div>
-                <div id="amount-panel" class="hidden">
-                    <h3>最後に賭け金を決める</h3>
-                    <div class="bet-quick" aria-label="賭け金プリセット">
-                        <button type="button" data-bet="100">100</button>
-                        <button type="button" data-bet="500">500</button>
-                        <button type="button" data-bet="1000">1000</button>
-                        <button type="button" data-bet="half">半分</button>
-                        <button type="button" data-bet="all">全部</button>
-                    </div>
-                    <div class="counter">
-                        <button type="button" id="bet-minus" aria-label="100コイン減らす">−</button>
-                        <input id="bet-amount" type="number" inputmode="numeric" min="0" step="100" value="100" aria-label="賭け金">
-                        <button type="button" id="bet-plus" aria-label="100コイン増やす">＋</button>
-                    </div>
-                    <div id="odds-preview" class="odds-preview"></div>
-                    <button id="confirm-bet" class="primary">この内容で賭ける</button>
-                </div>
-                <div class="bet-flow-actions">
-                    <button type="button" id="bet-back" class="ghost">ひとつ戻る</button>
-                    <button type="button" id="bet-cancel" class="ghost">選択をキャンセル</button>
-                </div>
-            </section>
+                <aside class="bet-sidebar" aria-label="ベット操作">
+                    <section id="bet-action-panel" class="bet-action-panel" aria-live="polite">
+                        <p id="bet-panel-placeholder" class="bet-panel-placeholder">馬を選んでください</p>
+                        <div id="bettype-panel" class="hidden">
+                            <h3>賭け式を選択</h3>
+                            <div id="bettype-tabs" class="bettype-tabs"></div>
+                            <p id="bettype-desc" class="bettype-desc"></p>
+                        </div>
+                        <div id="amount-panel" class="hidden">
+                            <h3>最後に賭け金を決める</h3>
+                            <div class="bet-quick" aria-label="賭け金プリセット">
+                                <button type="button" data-bet="100">100</button>
+                                <button type="button" data-bet="500">500</button>
+                                <button type="button" data-bet="1000">1000</button>
+                                <button type="button" data-bet="half">半分</button>
+                                <button type="button" data-bet="all">全部</button>
+                            </div>
+                            <div class="counter">
+                                <button type="button" id="bet-minus" aria-label="100コイン減らす">−</button>
+                                <input id="bet-amount" type="number" inputmode="numeric" min="0" step="100" value="100" aria-label="賭け金">
+                                <button type="button" id="bet-plus" aria-label="100コイン増やす">＋</button>
+                            </div>
+                            <div id="odds-preview" class="odds-preview"></div>
+                        </div>
+                        <div id="bet-flow-actions" class="bet-flow-actions hidden">
+                            <button type="button" id="bet-back" class="ghost">ひとつ戻る</button>
+                            <button type="button" id="bet-cancel" class="ghost">選択をキャンセル</button>
+                        </div>
+                        <div id="bet-confirm-dock" class="bet-confirm-dock">
+                            <div id="selection-bar" class="selection-bar" role="status">馬を選んでください</div>
+                            <button id="confirm-bet" class="primary" disabled>馬を選んでください</button>
+                        </div>
+                    </section>
 
-            <section class="purchased-bets" aria-labelledby="purchased-bets-title">
-                <h3 id="purchased-bets-title">購入済みのベット</h3>
-                <div id="betslip" class="betslip"></div>
-                <button id="skip-bet" class="ghost">ベットを終了する</button>
-            </section>
+                    <section class="purchased-bets" aria-labelledby="purchased-bets-title">
+                        <h3 id="purchased-bets-title">購入済みのベット</h3>
+                        <div id="betslip" class="betslip"></div>
+                        <button id="skip-bet" class="ghost">ベットを終了する</button>
+                    </section>
+                </aside>
+            </div>
 
         </section>
 

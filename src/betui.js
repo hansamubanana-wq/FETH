@@ -210,25 +210,34 @@ function renderSelection() {
     const preview = document.getElementById("odds-preview");
     const confirm = document.getElementById("confirm-bet");
     const panel = document.getElementById("bet-action-panel");
+    const placeholder = document.getElementById("bet-panel-placeholder");
     const typePanel = document.getElementById("bettype-panel");
     const amountPanel = document.getElementById("amount-panel");
+    const flowActions = document.getElementById("bet-flow-actions");
     const instruction = document.getElementById("pick-instruction");
     const names = cur.selection.map((id) => {
         const h = cur.engine.horses.find((x) => x.id === id);
         return `${h.id + 1}.${h.name}`;
     });
     if (cur.phase === "idle") {
-        panel.classList.add("hidden");
-        bar.classList.add("hidden");
+        panel.dataset.phase = "idle";
+        placeholder.classList.remove("hidden");
+        typePanel.classList.add("hidden");
+        amountPanel.classList.add("hidden");
+        flowActions.classList.add("hidden");
+        bar.textContent = "馬を選んでください";
+        confirm.disabled = true;
+        confirm.textContent = "馬を選んでください";
         instruction.textContent = cur.reviveMode ? "↓ 復活をかける馬をタップ" : "↓ 最初に軸となる馬をタップ";
         return;
     }
-    panel.classList.remove("hidden");
+    panel.dataset.phase = cur.phase;
+    placeholder.classList.add("hidden");
+    flowActions.classList.remove("hidden");
     typePanel.classList.toggle("hidden", cur.phase !== "type");
     amountPanel.classList.toggle("hidden", cur.phase !== "amount");
     amountPanel.classList.toggle("revive-mode", cur.reviveMode);
     amountPanel.querySelector("h3").textContent = cur.reviveMode ? "復活チャレンジの内容確認" : "最後に賭け金を決める";
-    bar.classList.remove("hidden");
     const joiner = type?.ordered ? " → " : " ・ ";
     const left = type ? type.nPick - cur.selection.length : 0;
     if (cur.phase === "type") bar.textContent = `選択馬 [${cur.selection[0] + 1}] → 賭け式を選択中`;
@@ -253,8 +262,12 @@ function renderSelection() {
         preview.textContent = "";
         preview.classList.add("hidden");
     }
-    confirm.disabled = !(selectionReady && amountReady);
-    confirm.textContent = !amountReady ? "金額を入力してください" : "この内容で賭ける";
+    confirm.disabled = !(selectionReady && amountReady && cur.phase === "amount");
+    if (cur.phase === "type") confirm.textContent = "賭け式を選んでください";
+    else if (cur.phase === "horses") confirm.textContent = type.ordered
+        ? `${cur.selection.length + 1}着になる馬を選んでください`
+        : `あと${left}頭選んでください`;
+    else confirm.textContent = !amountReady ? "金額を入力してください" : "この内容で賭ける";
 }
 
 function resetFlow() {
