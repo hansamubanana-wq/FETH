@@ -395,6 +395,18 @@ function renderIncomingInvites(items) {
     });
 }
 
+// Firestore のエラーを、原因が分かる日本語メッセージに変換する。
+// permission-denied は Firebase コンソール側のセキュリティルール未設定・期限切れで起きる。
+function firestoreErrorMessage(e, prefix) {
+    if (e && e.code === "permission-denied") {
+        return `${prefix}（Firestoreのアクセス権限がありません）\n\n` +
+            "Firebaseコンソールで Firestore のセキュリティルールを公開設定にしてください。" +
+            "テストモードのルールは30日で期限切れになります。";
+    }
+    if (e && e.code === "unavailable") return `${prefix}（ネットワークに接続できません）`;
+    return `${prefix}\n${(e && (e.code || e.message)) || e}`;
+}
+
 async function createRoom() {
     try { await ensureDb(); } catch (e) { alert("Firebaseに接続できませんでした"); return; }
     if (!requireProfile()) return;
@@ -403,10 +415,16 @@ async function createRoom() {
     await syncProfile().catch(() => {});
     o.code = randomCode();
     o.isHost = true;
-    await fb.setDoc(roomDoc(), {
-        host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0,
-        players: { [uid]: { name, balance: funds, betDone: false, tickets: [] } },
-    });
+    try {
+        await fb.setDoc(roomDoc(), {
+            host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0,
+            players: { [uid]: { name, balance: funds, betDone: false, tickets: [] } },
+        });
+    } catch (e) {
+        o.code = null; o.isHost = false;
+        alert(firestoreErrorMessage(e, "部屋を作れませんでした"));
+        return;
+    }
     setActive(o.code); addRecent(o.code);
     subscribe();
 }
@@ -419,7 +437,14 @@ async function joinRoom() {
     if (!code) { alert("合言葉を入力してください"); return; }
     await syncProfile().catch(() => {});
     o.code = code;
-    const snap = await fb.getDoc(roomDoc());
+    let snap;
+    try {
+        snap = await fb.getDoc(roomDoc());
+    } catch (e) {
+        o.code = null;
+        alert(firestoreErrorMessage(e, "部屋に参加できませんでした"));
+        return;
+    }
     if (!snap.exists()) { alert("その合言葉の部屋が見つかりません"); o.code = null; return; }
     const room = snap.data();
     o.isHost = (room.host === uid);
@@ -427,9 +452,15 @@ async function joinRoom() {
     // betDone=true にしておくと進行中のレースをブロックしない。
     const midGame = room.phase !== "lobby";
     if (midGame) o.betShownRound = room.round;
-    await fb.updateDoc(roomDoc(), {
-        [`players.${uid}`]: { name, balance: room.funds, betDone: midGame, tickets: [] },
-    });
+    try {
+        await fb.updateDoc(roomDoc(), {
+            [`players.${uid}`]: { name, balance: room.funds, betDone: midGame, tickets: [] },
+        });
+    } catch (e) {
+        o.code = null;
+        alert(firestoreErrorMessage(e, "部屋に参加できませんでした"));
+        return;
+    }
     setActive(o.code); addRecent(o.code);
     subscribe();
 }
