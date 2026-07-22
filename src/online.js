@@ -27,9 +27,10 @@ async function ensureDb() {
     fb = {
         db,
         doc: fsMod.doc, setDoc: fsMod.setDoc, updateDoc: fsMod.updateDoc,
-        getDoc: fsMod.getDoc, onSnapshot: fsMod.onSnapshot,
+        getDoc: fsMod.getDoc, onSnapshot: fsMod.onSnapshot, collection: fsMod.collection,
         deleteField: fsMod.deleteField, deleteDoc: fsMod.deleteDoc,
         arrayUnion: fsMod.arrayUnion, arrayRemove: fsMod.arrayRemove,
+        writeBatch: fsMod.writeBatch,
     };
     return fb;
 }
@@ -82,6 +83,8 @@ const o = {
 };
 
 function roomDoc() { return fb.doc(fb.db, "rooms", o.code); }
+function playersCollection() { return fb.collection(fb.db, "rooms", o.code, "players"); }
+function playerDoc(id = uid) { return fb.doc(fb.db, "rooms", o.code, "players", id); }
 function randomCode() {
     const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let s = "";
@@ -416,10 +419,12 @@ async function createRoom() {
     o.code = randomCode();
     o.isHost = true;
     try {
-        await fb.setDoc(roomDoc(), {
+        const batch = fb.writeBatch(fb.db);
+        batch.set(roomDoc(), {
             host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0,
-            players: { [uid]: { name, balance: funds, betDone: false, tickets: [] } },
         });
+        batch.set(playerDoc(), { name, balance: funds, betDone: false, tickets: [] });
+        await batch.commit();
     } catch (e) {
         o.code = null; o.isHost = false;
         alert(firestoreErrorMessage(e, "部屋を作れませんでした"));
@@ -453,9 +458,7 @@ async function joinRoom() {
     const midGame = room.phase !== "lobby";
     if (midGame) o.betShownRound = room.round;
     try {
-        await fb.updateDoc(roomDoc(), {
-            [`players.${uid}`]: { name, balance: room.funds, betDone: midGame, tickets: [] },
-        });
+        await fb.setDoc(playerDoc(), { name, balance: room.funds, betDone: midGame, tickets: [] }, { merge: true });
     } catch (e) {
         o.code = null;
         alert(firestoreErrorMessage(e, "部屋に参加できませんでした"));
@@ -490,8 +493,14 @@ function doLeave() {
     if (o.unsub) { o.unsub(); o.unsub = null; }
     if (fb && o.code) {
         const onlyMe = o.room && Object.keys(o.room.players || {}).filter((id) => id !== uid).length === 0;
-        if (onlyMe) fb.deleteDoc(roomDoc()).catch(() => {});            // 最後の1人なら部屋ごと削除
-        else fb.updateDoc(roomDoc(), { [`players.${uid}`]: fb.deleteField() }).catch(() => {});
+        if (onlyMe) {
+            const batch = fb.writeBatch(fb.db);
+            batch.delete(playerDoc());
+            batch.delete(roomDoc());
+            batch.commit().catch(() => {});                            // 最後の1人なら部屋ごと削除
+        } else {
+            fb.deleteDoc(playerDoc()).catch(() => {});
+        }
     }
     o.code = null; o.room = null; o.isHost = false; o.engine = null; o.engineSeed = null;
     clearActive();
@@ -516,9 +525,9 @@ export async function reconnectIfPossible() {
     try {
         await ensureDb();
         o.code = code;
-        const snap = await fb.getDoc(roomDoc());
-        if (snap.exists() && (snap.data().players || {})[uid]) {
-            o.isHost = (snap.data().host === uid);
+        const [roomSnap, playerSnap] = await Promise.all([fb.getDoc(roomDoc()), fb.getDoc(playerDoc())]);
+        if (roomSnap.exists() && playerSnap.exists()) {
+            o.isHost = (roomSnap.data().host === uid);
             subscribe();
             return true;
         }
@@ -529,7 +538,26 @@ export async function reconnectIfPossible() {
 
 function subscribe() {
     if (o.unsub) o.unsub();
-    o.unsub = fb.onSnapshot(roomDoc(), (snap) => onRoom(snap.exists() ? snap.data() : null));
+    let roomReady = false;
+    let playersReady = false;
+    let roomData = null;
+    let players = {};
+    const emit = () => {
+        if (!roomReady || !playersReady) return;
+        onRoom(roomData ? { ...roomData, players } : null);
+    };
+    const roomUnsub = fb.onSnapshot(roomDoc(), (snap) => {
+        roomData = snap.exists() ? snap.data() : null;
+        roomReady = true;
+        emit();
+    });
+    const playersUnsub = fb.onSnapshot(playersCollection(), (snap) => {
+        players = {};
+        snap.forEach((playerSnap) => { players[playerSnap.id] = playerSnap.data(); });
+        playersReady = true;
+        emit();
+    });
+    o.unsub = () => { roomUnsub(); playersUnsub(); };
 }
 
 function clampFunds(v) {
@@ -624,7 +652,8 @@ function renderPlayerList(elId, room, statusFn) {
 // ---- ベット ----
 function hostStartBetting() {
     const round = (o.room.round || 0) + 1;
-    const updates = {
+    const batch = fb.writeBatch(fb.db);
+    batch.update(roomDoc(), {
         phase: "betting",
         round,
         horseSeed: randomSeed(),
@@ -632,14 +661,16 @@ function hostStartBetting() {
         names: pickNames(NUM_HORSES),
         resultDeadlineAt: fb.deleteField(),
         betDeadlineAt: Date.now() + BET_WAIT_MS,
-    };
-    Object.keys(o.room.players || {}).forEach((id) => {
-        updates[`players.${id}.betDone`] = false;
-        updates[`players.${id}.tickets`] = [];
-        updates[`players.${id}.readyNext`] = false;
-        updates[`players.${id}.reviveResult`] = fb.deleteField();
     });
-    fb.updateDoc(roomDoc(), updates);
+    Object.keys(o.room.players || {}).forEach((id) => {
+        batch.update(playerDoc(id), {
+            betDone: false,
+            tickets: [],
+            readyNext: false,
+            reviveResult: fb.deleteField(),
+        });
+    });
+    batch.commit();
 }
 
 function showWait(room, title) {
@@ -670,9 +701,9 @@ function handleBetting(room) {
         engine: o.engine,
         balance: me.bankrupt ? 0 : me.balance,
         reviveMode: !!me.bankrupt,
-        onComplete: (tickets) => fb.updateDoc(roomDoc(), {
-            [`players.${uid}.tickets`]: tickets || [],
-            [`players.${uid}.betDone`]: true,
+        onComplete: (tickets) => fb.updateDoc(playerDoc(), {
+            tickets: tickets || [],
+            betDone: true,
         }),
     });
     startBetCountdown();
@@ -763,35 +794,43 @@ function trySettle() {
 
     const orderIds = orderFromSeed(room).map((h) => h.id);
     const ps = room.players || {};
-    const updates = { phase: "result", resultDeadlineAt: Date.now() + RESULT_WAIT_MS, gameOver: false };
+    const batch = fb.writeBatch(fb.db);
+    batch.update(roomDoc(), { phase: "result", resultDeadlineAt: Date.now() + RESULT_WAIT_MS, gameOver: false });
     Object.keys(ps).forEach((id) => {
         const player = ps[id];
         const tickets = player.tickets || [];
         if (player.bankrupt) {
             const reviveHit = tickets.some((t) => t.revive && t.typeKey === "win" && o.engine.byKey.win.test(orderIds, t.sel || []));
-            updates[`players.${id}.balance`] = reviveHit ? REVIVE_BALANCE : 0;
-            updates[`players.${id}.bankrupt`] = !reviveHit;
-            updates[`players.${id}.reviveResult`] = reviveHit ? "hit" : (tickets.some((t) => t.revive) ? "miss" : "none");
-            updates[`players.${id}.readyNext`] = false;
+            batch.update(playerDoc(id), {
+                balance: reviveHit ? REVIVE_BALANCE : 0,
+                bankrupt: !reviveHit,
+                reviveResult: reviveHit ? "hit" : (tickets.some((t) => t.revive) ? "miss" : "none"),
+                readyNext: false,
+            });
             return;
         }
         const res = settleTickets(tickets, orderIds, o.engine.horses, o.engine.byKey);
         const nb = player.balance + res.delta;
-        updates[`players.${id}.balance`] = Math.max(0, nb);
-        updates[`players.${id}.bankrupt`] = nb <= 0;
-        updates[`players.${id}.reviveResult`] = fb.deleteField();
-        updates[`players.${id}.readyNext`] = false;
+        batch.update(playerDoc(id), {
+            balance: Math.max(0, nb),
+            bankrupt: nb <= 0,
+            reviveResult: fb.deleteField(),
+            readyNext: false,
+        });
     });
-    fb.updateDoc(roomDoc(), updates);
+    batch.commit();
 }
 function hostReset() {
-    const updates = { phase: "lobby", gameOver: false, raceSeed: 0 };
+    const batch = fb.writeBatch(fb.db);
+    batch.update(roomDoc(), { phase: "lobby", gameOver: false, raceSeed: 0 });
     Object.keys(o.room.players || {}).forEach((id) => {
-        updates[`players.${id}.balance`] = o.room.funds;
-        updates[`players.${id}.betDone`] = false;
-        updates[`players.${id}.tickets`] = [];
+        batch.update(playerDoc(id), {
+            balance: o.room.funds,
+            betDone: false,
+            tickets: [],
+        });
     });
-    fb.updateDoc(roomDoc(), updates);
+    batch.commit();
 }
 
 // ---- 結果 ----
