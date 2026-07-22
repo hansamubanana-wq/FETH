@@ -10,7 +10,7 @@
 - 実力を中心に、調子・展開・スタミナ配分で僅差の番狂わせが起こる決定論的レースモデル
 - 単勝、複勝、馬連、馬単、ワイド、3連複、3連単のベット
 - ローカル複数人プレイ
-- Firebase Firestore を使ったオンライン部屋作成・参加
+- Firebase Firestore を使ったオンライン部屋作成・参加（20人規模、プレイヤー状態はサブコレクションで分散）
 - 一緒に遊んだ人のフレンド化と招待
 - 初回入力したプレイヤー名の保存
 - 画面ごとにクロスフェードする全画面競馬場背景とガラス調UI
@@ -92,7 +92,8 @@ py -m http.server 5173
 ├── index.html
 ├── manifest.webmanifest
 ├── scripts/
-│   └── monte-carlo-balance.mjs
+│   ├── monte-carlo-balance.mjs
+│   └── verify-online-scale.mjs
 ├── style.css
 └── README.md
 ```
@@ -103,9 +104,18 @@ py -m http.server 5173
 node scripts/monte-carlo-balance.mjs
 ```
 
+20クライアント・3ラウンドのオンライン負荷検証は、Firebase SDKを一時導入して実行します。`ZZ` で始まる専用ルームを使い、正常終了・異常終了を問わず作成済みの検証データを削除します。
+
+```bash
+npm i --no-save firebase
+node scripts/verify-online-scale.mjs
+```
+
+`rooms/{code}/players/{uid}` を利用するため、実行前に [firestore.rules](firestore.rules) の内容をFirebaseコンソールで公開してください。ルールファイルの更新だけでは本番プロジェクトへ反映されません。
+
 ## 今後の改善案
 
-- Firestore 更新を transaction 化してオンライン同時操作により強くする
+- ホスト交代時のフェーズ更新を transaction 化してオンライン同時操作により強くする
 - フレンド情報をサーバー側にも保存して別端末でも引き継ぐ
 - 馬名削除の取り消し機能を追加する
 - スマホ画面でのオンライン複数人プレイをさらに検証する
