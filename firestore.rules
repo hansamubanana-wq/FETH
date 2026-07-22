@@ -16,6 +16,12 @@ service cloud.firestore {
     // 競馬ゲームのルーム。お金が絡まないカジュアル用途なので誰でも読み書き可。
     match /rooms/{code} {
       allow read, write: if true;
+
+      // プレイヤーごとの高頻度な状態はサブコレクションへ分離する。
+      // Firestore のルールは親 match から子へ継承されないため明示的に許可する。
+      match /players/{uid} {
+        allow read, write: if true;
+      }
     }
     // 馬名の共有プール
     match /meta/{doc} {
