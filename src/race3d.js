@@ -14,6 +14,7 @@ const HIGH_PIXEL_RATIO = 2;
 const FALLBACK_PIXEL_RATIO = 1.5;
 const FPS_SAMPLE_MS = 3000;
 const MIN_ACCEPTABLE_FPS = 30;
+const TEXTURE_BASE_URL = "./assets/art/tex/";
 
 // 動的カメラの設定
 const FULL_VIEW_HEIGHT = 78;   // 拡大した会場全体が収まる最大ズームアウト
@@ -82,6 +83,7 @@ export class Race3DRenderer {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
 
         this.root = new THREE.Group();
         this.scene.add(this.root);
@@ -474,7 +476,6 @@ export class Race3DRenderer {
         const turf = new THREE.Mesh(
             new THREE.PlaneGeometry(280, 190, 1, 1),
             new THREE.MeshStandardMaterial({
-                color: 0x2d8a3b,
                 map: this._createGrassTexture(),
                 roughness: 0.94,
             })
@@ -482,6 +483,20 @@ export class Race3DRenderer {
         turf.rotation.x = -Math.PI / 2;
         turf.receiveShadow = true;
         this.root.add(turf);
+
+        // 芝の刈り込み模様は写真に焼き込まず、薄い別レイヤーで維持する。
+        const mowing = new THREE.Mesh(
+            new THREE.PlaneGeometry(280, 190, 1, 1),
+            new THREE.MeshBasicMaterial({
+                map: this._createMowingStripeTexture(),
+                transparent: true,
+                opacity: 0.18,
+                depthWrite: false,
+            })
+        );
+        mowing.rotation.x = -Math.PI / 2;
+        mowing.position.y = 0.012;
+        this.root.add(mowing);
 
         this._addSky();
         this._addTrack();
@@ -521,8 +536,11 @@ export class Race3DRenderer {
         g.addColorStop(1, palette[2]);
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.SRGBColorSpace;
+        const tex = this._loadTextureWithFallback(
+            `${TEXTURE_BASE_URL}${["sky-day.png", "sky-evening.png", "sky-night.png"][this.skyTheme]}`,
+            new THREE.CanvasTexture(canvas),
+            { equirectangular: true }
+        );
         this.scene.background = tex;
 
         if (this.timeOfDay === "night") {
@@ -634,13 +652,11 @@ export class Race3DRenderer {
             ctx.fillStyle = `hsla(${26 + Math.random() * 10}, ${38 + Math.random() * 18}%, ${light}%, ${0.25 + Math.random() * 0.35})`;
             ctx.fillRect(x, y, 1 + Math.random() * 3, 1 + Math.random() * 2);
         }
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(1 / 10, 1 / 10); // ShapeGeometryのUVはワールド座標なので縮めて敷き詰める
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
-        return texture;
+        return this._loadTextureWithFallback(
+            `${TEXTURE_BASE_URL}dirt.png`,
+            new THREE.CanvasTexture(canvas),
+            { repeat: [1 / 10, 1 / 10] }
+        );
     }
 
     _createGrassTexture() {
@@ -648,10 +664,8 @@ export class Race3DRenderer {
         canvas.width = 256;
         canvas.height = 256;
         const ctx = canvas.getContext("2d");
-        for (let x = 0; x < canvas.width; x += 16) {
-            ctx.fillStyle = (x / 16) % 2 ? "#236d30" : "#2d8138";
-            ctx.fillRect(x, 0, 16, canvas.height);
-        }
+        ctx.fillStyle = "#2a7835";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         for (let i = 0; i < 3600; i++) {
             const x = Math.random() * canvas.width;
             const y = Math.random() * canvas.height;
@@ -665,12 +679,55 @@ export class Race3DRenderer {
             ctx.lineTo(x + Math.random() * 3 - 1.5, y - len);
             ctx.stroke();
         }
+        return this._loadTextureWithFallback(
+            `${TEXTURE_BASE_URL}turf.png`,
+            new THREE.CanvasTexture(canvas),
+            { repeat: [8, 6] }
+        );
+    }
+
+    _createMowingStripeTexture() {
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 8;
+        const ctx = canvas.getContext("2d");
+        for (let x = 0; x < canvas.width; x += 16) {
+            ctx.fillStyle = (x / 16) % 2 ? "rgba(0,0,0,0.28)" : "rgba(255,255,255,0.16)";
+            ctx.fillRect(x, 0, 16, canvas.height);
+        }
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(8, 6);
+        texture.repeat.set(8, 1);
         texture.colorSpace = THREE.SRGBColorSpace;
-        texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+        texture.anisotropy = this.maxAnisotropy;
+        return texture;
+    }
+
+    _loadTextureWithFallback(url, fallback, { repeat = null, equirectangular = false } = {}, onError = null, onLoad = null) {
+        const texture = fallback;
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = this.maxAnisotropy;
+        if (repeat) {
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(...repeat);
+        }
+        if (equirectangular) texture.mapping = THREE.EquirectangularReflectionMapping;
+
+        new THREE.ImageLoader().load(
+            url,
+            (image) => {
+                texture.image = image;
+                texture.needsUpdate = true;
+                if (onLoad) onLoad();
+            },
+            undefined,
+            () => {
+                // CanvasTextureをそのまま使い続け、オフラインや404でも描画を成立させる。
+                if (onError) onError();
+            }
+        );
         return texture;
     }
 
@@ -735,6 +792,30 @@ export class Race3DRenderer {
         );
         fascia.position.set(-8, 8.6, -48.9);
         this.root.add(fascia);
+
+        // 読み込み成功時だけ写真の観客席を前面に重ねる。失敗時は下の従来観客を表示する。
+        const crowdFallback = document.createElement("canvas");
+        crowdFallback.width = 2;
+        crowdFallback.height = 2;
+        const crowdFallbackCtx = crowdFallback.getContext("2d");
+        crowdFallbackCtx.clearRect(0, 0, 2, 2);
+        let crowdFacade;
+        const crowdTexture = this._loadTextureWithFallback(
+            `${TEXTURE_BASE_URL}crowd.png`,
+            new THREE.CanvasTexture(crowdFallback),
+            { repeat: [2, 1] },
+            () => { if (crowdFacade) crowdFacade.visible = false; },
+            () => { if (crowdFacade) crowdFacade.visible = true; }
+        );
+        crowdFacade = new THREE.Mesh(
+            new THREE.PlaneGeometry(54, 6.4),
+            new THREE.MeshStandardMaterial({ map: crowdTexture, roughness: 0.88 })
+        );
+        crowdFacade.position.set(-8, 3.65, -44.34);
+        crowdFacade.visible = false;
+        crowdFacade.castShadow = true;
+        crowdFacade.receiveShadow = true;
+        this.root.add(crowdFacade);
 
         for (let i = 0; i < 13; i++) {
             const pane = new THREE.Mesh(new THREE.BoxGeometry(2.4, 4.4, 0.16), glassMat);
