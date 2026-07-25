@@ -56,21 +56,23 @@ export class QualityAutoAdjuster {
         this.onChange = onChange;
         this.highWindows = 0;
         this.latches = new Set();
+        this.ceilingIndex = QUALITY_TIERS.length - 1;
     }
 
     observe(fps) {
         const index = QUALITY_TIERS.indexOf(this.tier);
         if (fps < 30 && index > 0) {
             const next = QUALITY_TIERS[index - 1];
-            this.latches.add(`${next}>${this.tier}`);
+            this.latches.add(`${this.tier}>${next}`);
             this.highWindows = 0;
             return this._change(next, fps, "down");
         }
-        if (fps > 45 && index < QUALITY_TIERS.length - 1) {
+        if (fps > 45 && index < Math.min(QUALITY_TIERS.length - 1, this.ceilingIndex)) {
             this.highWindows++;
             const next = QUALITY_TIERS[index + 1];
-            if (this.highWindows >= 2 && !this.latches.has(`${this.tier}>${next}`)) {
+            if (this.highWindows >= 2) {
                 this.highWindows = 0;
+                if (this.latches.has(`${next}>${this.tier}`)) this.ceilingIndex = index + 1;
                 return this._change(next, fps, "up");
             }
         } else {

@@ -94,6 +94,7 @@ export class Race3DRenderer {
             ? new QualityAutoAdjuster(this.qualityTier, (tier, detail) => this._applyQualityTier(tier, detail))
             : null;
         this.performanceSample = { startedAt: performance.now(), frames: 0 };
+        this.performanceHistory = [];
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualitySettings.pixelRatio));
         this.renderer.shadowMap.enabled = this.qualitySettings.shadows;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -107,6 +108,7 @@ export class Race3DRenderer {
         this._buildRaceEffects();
         this.readyPromise = this._loadHorseModel();
         this.resize();
+        window.__lastRace3D = this;
     }
 
     resize() {
@@ -325,6 +327,7 @@ export class Race3DRenderer {
         if (duration < FPS_SAMPLE_MS) return;
 
         const fps = sample.frames * 1000 / duration;
+        this.performanceHistory.push(+fps.toFixed(1));
         sample.startedAt = now;
         sample.frames = 0;
         console.info("3D quality sample", { tier: this.qualityTier, fps: +fps.toFixed(1) });
@@ -764,6 +767,7 @@ export class Race3DRenderer {
             (image) => {
                 entry.texture.image = image;
                 entry.texture.needsUpdate = true;
+                entry.loadedSize = `${image.naturalWidth || image.width}x${image.naturalHeight || image.height}`;
                 entry.onLoad?.();
             },
             undefined,
@@ -783,6 +787,22 @@ export class Race3DRenderer {
                 this._loadTierTexture(entry);
             }
         }
+    }
+
+    getQualityReport() {
+        return {
+            preference: this.qualityPreference,
+            tier: this.qualityTier,
+            fps: this.performanceHistory.at(-1) || 0,
+            pixelRatio: this.renderer.getPixelRatio(),
+            shadows: this.renderer.shadowMap.enabled,
+            shadowMapSize: this.qualitySettings.shadowMapSize,
+            textures: Object.fromEntries(this.textureRegistry.map((entry) => [
+                entry.file,
+                entry.skipOnLow && this.qualityTier === "low" ? "gradient-fallback" : (entry.loadedSize || "loading"),
+            ])),
+            latches: this.autoAdjuster ? [...this.autoAdjuster.latches] : [],
+        };
     }
 
     _addRails() {
