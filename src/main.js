@@ -1,5 +1,6 @@
 // エントリポイント。ズーム禁止・ホーム画面・各モードの起動をまとめる。
 import { showScreen } from "./ui.js";
+import { initGraphicsQualityUI } from "./graphics-quality.js";
 import { initBetUI } from "./betui.js";
 import { initLocal, enterLocalSetup } from "./local.js";
 import { initOnline, enterOnlineHome, reconnectIfPossible, inRoom, requestLeave, preloadNames, checkVersion } from "./online.js";
@@ -60,6 +61,7 @@ if (badge) badge.textContent = "v" + APP_VERSION;
 const updateBanner = document.getElementById("update-banner");
 if (updateBanner) updateBanner.addEventListener("click", () => location.reload());
 checkVersion(() => { if (updateBanner) updateBanner.classList.remove("hidden"); });
+initGraphicsQualityUI();
 
 // 馬名の共有プールをバックグラウンドで取得（ローカルでも使えるように）
 preloadNames();
