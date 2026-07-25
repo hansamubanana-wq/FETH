@@ -68,6 +68,7 @@ export class Race {
 
     start() {
         this._startWall = performance.now();
+        this.renderer3d?.beginPerformanceMonitoring();
         this._raf = requestAnimationFrame((t) => this._loop(t));
     }
 

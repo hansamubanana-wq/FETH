@@ -313,6 +313,12 @@ export class Race3DRenderer {
         this.renderer.dispose();
     }
 
+    beginPerformanceMonitoring() {
+        this.performanceSample.startedAt = performance.now();
+        this.performanceSample.frames = 0;
+        this.performanceHistory.length = 0;
+    }
+
     _monitorPerformance() {
         const now = performance.now();
         const sample = this.performanceSample;

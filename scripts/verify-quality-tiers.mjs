@@ -27,7 +27,7 @@ for (const tier of ["low", "mid", "high"]) {
     await page.goto(URL);
     await page.evaluate((value) => localStorage.setItem("feth.graphicsQuality", value), tier);
     await enterRace(page);
-    await page.waitForTimeout(3500);
+    await page.waitForFunction(() => window.__lastRace3D?.performanceHistory.length > 0, null, { timeout: 15000 });
     results[tier] = await page.evaluate(() => window.__lastRace3D.getQualityReport());
     await page.close();
 }
