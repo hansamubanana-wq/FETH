@@ -38,8 +38,8 @@ await page.evaluate(() => localStorage.setItem("feth.graphicsQuality", "auto"));
 await enterRace(page);
 const adjustment = await page.evaluate(() => {
     const renderer = window.__lastRace3D;
-    renderer._applyQualityTier("high", { reason: "verification-start" });
-    renderer.autoAdjuster.tier = "high";
+    renderer._applyQualityTier("mid", { reason: "verification-start" });
+    renderer.autoAdjuster.tier = "mid";
     const states = [{ input: "start", tier: renderer.qualityTier }];
     renderer.autoAdjuster.observe(20);
     states.push({ input: "20fps", tier: renderer.qualityTier });
