@@ -53,7 +53,7 @@
         🔄 新しいバージョンがあります。タップして更新してください
     </div>
     <div id="app">
-        <div class="version-badge" aria-label="アプリバージョン">v0.17.0</div>
+        <div class="version-badge" aria-label="アプリバージョン">v0.17.1</div>
         <!-- ホーム -->
         <section id="screen-home" class="screen active">
             <div class="home-particles" aria-hidden="true">
@@ -124,7 +124,7 @@
             <div class="card online-panel">
                 <div class="profile-box">
                     <div class="recent-label">プレイヤー名</div>
-                    <div class="name-reg-row">
+                    <div class="profile-name-row">
                         <input id="profile-name-input" type="text" maxlength="10" placeholder="名前を入力">
                         <button id="profile-name-save" class="ghost">保存</button>
                     </div>
@@ -135,16 +135,6 @@
                 <button id="online-join-open" class="ghost">合言葉で参加する</button>
                 <div id="recent-rooms" class="recent-rooms hidden"></div>
                 <div id="friend-list" class="friend-list hidden"></div>
-
-                <div class="name-reg">
-                    <div class="recent-label">🐴 馬の名前を登録（みんなのレースに出ます）</div>
-                    <div class="name-reg-row">
-                        <input id="horse-name-input" type="text" maxlength="12" placeholder="馬の名前">
-                        <button id="horse-name-add" class="ghost">登録</button>
-                    </div>
-                    <div class="recent-label" id="horse-name-count"></div>
-                    <div id="horse-name-list" class="name-list"></div>
-                </div>
 
                 <button class="ghost" data-home>← ホームへ</button>
             </div>

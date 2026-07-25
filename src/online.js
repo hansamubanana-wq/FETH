@@ -8,7 +8,7 @@ import { playRace, renderResult } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
 import { simulateRaceData } from "./race.js";
 import { makeRng } from "./rng.js";
-import { mergeNames, pickNames, addName, removeName, setRemoteAdder, customCount } from "./names.js";
+import { pickNames } from "./names.js";
 import { APP_VERSION, APP_BUILD } from "./version.js";
 
 const FB_VER = "10.12.2";
@@ -18,7 +18,6 @@ const REVIVE_BALANCE = 3000;
 const SUMMARY_DEBOUNCE_MS = 300;
 const configured = !!firebaseConfig.projectId;
 let fb = null;
-let remoteHorseNames = [];
 
 async function ensureDb() {
     if (fb) return fb;
@@ -132,14 +131,6 @@ export function initOnline() {
         if (requireProfile()) openJoinScreen();
     }, true);
 
-    // 馬名の登録（サーバー保存）
-    setRemoteAdder(persistName);
-    const addBtn = document.getElementById("horse-name-add");
-    if (addBtn) addBtn.addEventListener("click", () => {
-        const inp = document.getElementById("horse-name-input");
-        if (addName(inp.value)) { inp.value = ""; updateNameCount(); preloadNames(); }
-    });
-
     // アプリ切替・誤操作で抜けないように：在室中はページ離脱を警告
     window.addEventListener("beforeunload", (e) => {
         if (o.code) { e.preventDefault(); e.returnValue = ""; }
@@ -158,8 +149,6 @@ export function enterOnlineHome() {
     renderFriends();
     listenInvites();
     updateProfileStatus();
-    updateNameCount();
-    preloadNames();
     showScreen("screen-online-home");
 }
 
@@ -208,12 +197,6 @@ async function syncProfile() {
     await fb.setDoc(fb.doc(fb.db, "users", uid), { name: getName(), updatedAt: Date.now() }, { merge: true });
 }
 
-function updateNameCount() {
-    const el = document.getElementById("horse-name-count");
-    if (el) el.textContent = `登録済み ${customCount()} 件`;
-    renderHorseNameList();
-}
-
 // バージョン更新の検知。自分より新しいビルドがサーバーにあれば onOutdated を呼ぶ。
 // 自分が最新なら meta/version を自分のビルドに更新する。
 export async function checkVersion(onOutdated) {
@@ -234,71 +217,6 @@ export async function checkVersion(onOutdated) {
             if (b > APP_BUILD) onOutdated(b);
         });
     } catch (e) { /* オフライン等は無視 */ }
-}
-
-// サーバーの馬名プールを取得してローカルに統合
-export async function preloadNames() {
-    if (!configured) return;
-    try {
-        await ensureDb();
-        const snap = await fb.getDoc(fb.doc(fb.db, "meta", "horseNames"));
-        remoteHorseNames = snap.exists() ? [...new Set((snap.data().names || []).filter(Boolean))] : [];
-        if (remoteHorseNames.length) mergeNames(remoteHorseNames);
-        updateNameCount();
-    } catch (e) { /* オフライン時はローカルのみ */ }
-}
-
-// 馬名をサーバーへ保存（重複は arrayUnion が弾く）
-async function persistName(name) {
-    if (!configured) return;
-    try {
-        await ensureDb();
-        await fb.setDoc(fb.doc(fb.db, "meta", "horseNames"),
-            { names: fb.arrayUnion(name) }, { merge: true });
-        if (!remoteHorseNames.includes(name)) remoteHorseNames.push(name);
-        renderHorseNameList();
-    } catch (e) { /* 失敗してもローカルには残る */ }
-}
-
-function renderHorseNameList() {
-    const box = document.getElementById("horse-name-list");
-    if (!box) return;
-    box.innerHTML = "";
-    if (!remoteHorseNames.length) {
-        box.classList.add("hidden");
-        return;
-    }
-    box.classList.remove("hidden");
-    remoteHorseNames
-        .slice()
-        .sort((a, b) => a.localeCompare(b, "ja"))
-        .forEach((name) => {
-            const row = document.createElement("div");
-            row.className = "name-row";
-            const label = document.createElement("span");
-            label.textContent = name;
-            row.appendChild(label);
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.textContent = "削除";
-            btn.addEventListener("click", () => deleteHorseName(name));
-            row.appendChild(btn);
-            box.appendChild(row);
-        });
-}
-
-async function deleteHorseName(name) {
-    if (!confirm(`「${name}」をサーバーの馬名から削除しますか？`)) return;
-    try {
-        await ensureDb();
-        await fb.setDoc(fb.doc(fb.db, "meta", "horseNames"),
-            { names: fb.arrayRemove(name) }, { merge: true });
-        remoteHorseNames = remoteHorseNames.filter((n) => n !== name);
-        removeName(name);
-        updateNameCount();
-    } catch (e) {
-        alert("削除できませんでした");
-    }
 }
 
 // 最近遊んだ合言葉（フレンドと使った部屋）をワンタップ参加用に表示
