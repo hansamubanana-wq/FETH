@@ -655,7 +655,9 @@ export class Race3DRenderer {
         return this._loadTextureWithFallback(
             `${TEXTURE_BASE_URL}dirt.png`,
             new THREE.CanvasTexture(canvas),
-            { repeat: [1 / 10, 1 / 10] }
+            // ShapeGeometry のUVはワールド座標なので repeat は「1/1タイルの単位数」。
+            // 1/10 では1タイル10単位で砂の粒が伸びるため、4単位程度に詰める。
+            { repeat: [1 / 4, 1 / 4] }
         );
     }
 
@@ -682,7 +684,9 @@ export class Race3DRenderer {
         return this._loadTextureWithFallback(
             `${TEXTURE_BASE_URL}turf.png`,
             new THREE.CanvasTexture(canvas),
-            { repeat: [8, 6] }
+            // 芝の面は 280x190。1タイル=4ワールド単位程度まで詰めないと
+            // 馬(全長2〜3単位)に対して草の粒が引き伸ばされ、のっぺりした緑になる。
+            { repeat: [70, 48] }
         );
     }
 
