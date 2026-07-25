@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
+import {
+    getQualityPreference,
+    profileGraphicsCapability,
+    QUALITY_SETTINGS,
+    QualityAutoAdjuster,
+} from "./graphics-quality.js";
 
 const HORSE_MODEL_URL = "https://threejs.org/examples/models/gltf/Horse.glb";
 const TRACK_LEN = 820;
@@ -10,10 +16,7 @@ const CENTER_RZ_SCALE = 0.16 * VENUE_SCALE;
 const LANE_SPREAD = 0.13;
 const PLAYBACK_SPEED = 1.25;
 const COAT_COLORS = [0x8b3f24, 0x5a321f, 0x3b2a24, 0xb9783f, 0x6d5141, 0xd8c8aa, 0x9b4f2e, 0x24211f];
-const HIGH_PIXEL_RATIO = 2;
-const FALLBACK_PIXEL_RATIO = 1.5;
 const FPS_SAMPLE_MS = 3000;
-const MIN_ACCEPTABLE_FPS = 30;
 const TEXTURE_BASE_URL = "./assets/art/tex/";
 
 // 動的カメラの設定
@@ -77,13 +80,26 @@ export class Race3DRenderer {
             alpha: false,
             powerPreference: "high-performance",
         });
-        this.qualityLevel = 0;
+        this.textureRegistry = [];
+        this.qualityPreference = getQualityPreference();
+        this.capabilityProfile = profileGraphicsCapability({
+            renderer: this.renderer,
+            width: canvas.clientWidth || innerWidth,
+            height: canvas.clientHeight || innerHeight,
+            dpr: window.devicePixelRatio || 1,
+        });
+        this.qualityTier = this.qualityPreference === "auto" ? this.capabilityProfile.tier : this.qualityPreference;
+        this.qualitySettings = QUALITY_SETTINGS[this.qualityTier];
+        this.autoAdjuster = this.qualityPreference === "auto"
+            ? new QualityAutoAdjuster(this.qualityTier, (tier, detail) => this._applyQualityTier(tier, detail))
+            : null;
         this.performanceSample = { startedAt: performance.now(), frames: 0 };
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, HIGH_PIXEL_RATIO));
-        this.renderer.shadowMap.enabled = true;
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualitySettings.pixelRatio));
+        this.renderer.shadowMap.enabled = this.qualitySettings.shadows;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
+        console.info("3D quality profile", { preference: this.qualityPreference, ...this.capabilityProfile, selectedTier: this.qualityTier });
 
         this.root = new THREE.Group();
         this.scene.add(this.root);
@@ -311,21 +327,30 @@ export class Race3DRenderer {
         const fps = sample.frames * 1000 / duration;
         sample.startedAt = now;
         sample.frames = 0;
-        if (fps < MIN_ACCEPTABLE_FPS && this.qualityLevel < 3) {
-            this._applyQualityFallback(this.qualityLevel + 1);
-        }
+        console.info("3D quality sample", { tier: this.qualityTier, fps: +fps.toFixed(1) });
+        this.autoAdjuster?.observe(fps);
     }
 
-    _applyQualityFallback(level) {
-        this.qualityLevel = level;
-        if (level === 1) {
-            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, FALLBACK_PIXEL_RATIO));
-            this.resize();
-        } else if (level === 2) {
-            this.renderer.shadowMap.enabled = false;
+    _applyQualityTier(tier, detail = {}) {
+        if (!QUALITY_SETTINGS[tier] || tier === this.qualityTier) return;
+        this.qualityTier = tier;
+        this.qualitySettings = QUALITY_SETTINGS[tier];
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualitySettings.pixelRatio));
+        this.renderer.shadowMap.enabled = this.qualitySettings.shadows;
+        if (this.sunLight) {
+            this.sunLight.castShadow = this.qualitySettings.shadows;
+            if (this.qualitySettings.shadowMapSize) {
+                this.sunLight.shadow.mapSize.setScalar(this.qualitySettings.shadowMapSize);
+                this.sunLight.shadow.map?.dispose();
+                this.sunLight.shadow.map = null;
+            }
         }
-        // level 3 は生成・更新時に砂埃、フラッシュ、紙吹雪を半数に抑える。
-        console.info(`3D quality fallback: level ${level}`);
+        this.root?.traverse((object) => {
+            if (object.isMesh) object.castShadow = this.qualitySettings.shadows && object.userData.castShadow !== false;
+        });
+        this._refreshTierTextures();
+        this.resize();
+        console.info("3D quality changed", { tier, ...detail });
     }
 
     _buildRaceEffects() {
@@ -374,7 +399,7 @@ export class Race3DRenderer {
     _updateRaceEffects(distances, leader, elapsed, dt) {
         const progress = Math.max(...distances) / TRACK_LEN;
         const leaders = distances.map((d, i) => ({ d, i })).sort((a, b) => b.d - a.d).slice(0, 3);
-        const particleScale = this.qualityLevel >= 3 ? 0.5 : 1;
+        const particleScale = this.qualitySettings.particleScale;
         const sprayCount = Math.max(1, Math.floor(this.spray.particles.length * particleScale));
         const speedFactor = PLAYBACK_SPEED * (0.82 + Math.min(1, progress) * 0.3);
         this.sprayAccumulator += dt * 48 * speedFactor * particleScale;
@@ -409,7 +434,7 @@ export class Race3DRenderer {
         this.flashClock += dt;
         this.flashLights.forEach((light, i) => {
             const pulse = Math.sin(elapsed * 18 + light.userData.phase * 9) > 0.965;
-            const enabled = this.qualityLevel < 3 || i % 2 === 0;
+            const enabled = this.qualitySettings.particleScale === 1 || i % 2 === 0;
             light.intensity = enabled && inFinalStraight && pulse ? 8 : 0;
         });
 
@@ -464,13 +489,14 @@ export class Race3DRenderer {
             night ? 0.55 : (evening ? 2.25 : 2.6)
         );
         sun.position.set(-46, 88, 42);
-        sun.castShadow = true;
-        sun.shadow.mapSize.set(2048, 2048);
+        sun.castShadow = this.qualitySettings.shadows;
+        sun.shadow.mapSize.setScalar(this.qualitySettings.shadowMapSize || 1024);
         sun.shadow.bias = -0.0003;
         sun.shadow.camera.left = -90;
         sun.shadow.camera.right = 90;
         sun.shadow.camera.top = 90;
         sun.shadow.camera.bottom = -90;
+        this.sunLight = sun;
         this.scene.add(sun);
 
         const turf = new THREE.Mesh(
@@ -536,15 +562,16 @@ export class Race3DRenderer {
         g.addColorStop(1, palette[2]);
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const skyFile = ["sky-day.png", "sky-evening.png", "sky-night.png"][this.skyTheme];
         const tex = this._loadTextureWithFallback(
-            `${TEXTURE_BASE_URL}${["sky-day.png", "sky-evening.png", "sky-night.png"][this.skyTheme]}`,
+            skyFile,
             new THREE.CanvasTexture(canvas),
-            { equirectangular: true }
+            { equirectangular: true, skipOnLow: true }
         );
         this.scene.background = tex;
 
         if (this.timeOfDay === "night") {
-            const starCount = 220;
+            const starCount = Math.round(220 * this.qualitySettings.crowdScale);
             const positions = new Float32Array(starCount * 3);
             for (let i = 0; i < starCount; i++) {
                 const angle = (i * 2.399963 + this.skyTheme) % (Math.PI * 2);
@@ -653,7 +680,7 @@ export class Race3DRenderer {
             ctx.fillRect(x, y, 1 + Math.random() * 3, 1 + Math.random() * 2);
         }
         return this._loadTextureWithFallback(
-            `${TEXTURE_BASE_URL}dirt.png`,
+            "dirt.png",
             new THREE.CanvasTexture(canvas),
             // ShapeGeometry のUVはワールド座標なので repeat は「1/1タイルの単位数」。
             // 1/10 では1タイル10単位で砂の粒が伸びるため、4単位程度に詰める。
@@ -682,7 +709,7 @@ export class Race3DRenderer {
             ctx.stroke();
         }
         return this._loadTextureWithFallback(
-            `${TEXTURE_BASE_URL}turf.png`,
+            "turf.png",
             new THREE.CanvasTexture(canvas),
             // 芝の面は 280x190。1タイル=4ワールド単位程度まで詰めないと
             // 馬(全長2〜3単位)に対して草の粒が引き伸ばされ、のっぺりした緑になる。
@@ -708,8 +735,9 @@ export class Race3DRenderer {
         return texture;
     }
 
-    _loadTextureWithFallback(url, fallback, { repeat = null, equirectangular = false } = {}, onError = null, onLoad = null) {
+    _loadTextureWithFallback(file, fallback, { repeat = null, equirectangular = false, skipOnLow = false } = {}, onError = null, onLoad = null) {
         const texture = fallback;
+        const fallbackImage = fallback.image;
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = this.maxAnisotropy;
         if (repeat) {
@@ -719,20 +747,42 @@ export class Race3DRenderer {
         }
         if (equirectangular) texture.mapping = THREE.EquirectangularReflectionMapping;
 
+        const entry = { file, texture, fallbackImage, skipOnLow, onError, onLoad };
+        this.textureRegistry.push(entry);
+        if (!(skipOnLow && this.qualityTier === "low")) this._loadTierTexture(entry);
+        return texture;
+    }
+
+    _textureUrl(file) {
+        const directory = this.qualityTier === "low" ? "half/" : "";
+        return `${TEXTURE_BASE_URL}${directory}${file}`;
+    }
+
+    _loadTierTexture(entry) {
         new THREE.ImageLoader().load(
-            url,
+            this._textureUrl(entry.file),
             (image) => {
-                texture.image = image;
-                texture.needsUpdate = true;
-                if (onLoad) onLoad();
+                entry.texture.image = image;
+                entry.texture.needsUpdate = true;
+                entry.onLoad?.();
             },
             undefined,
             () => {
                 // CanvasTextureをそのまま使い続け、オフラインや404でも描画を成立させる。
-                if (onError) onError();
+                entry.onError?.();
             }
         );
-        return texture;
+    }
+
+    _refreshTierTextures() {
+        for (const entry of this.textureRegistry) {
+            if (entry.skipOnLow && this.qualityTier === "low") {
+                entry.texture.image = entry.fallbackImage;
+                entry.texture.needsUpdate = true;
+            } else {
+                this._loadTierTexture(entry);
+            }
+        }
     }
 
     _addRails() {
@@ -805,7 +855,7 @@ export class Race3DRenderer {
         crowdFallbackCtx.clearRect(0, 0, 2, 2);
         let crowdFacade;
         const crowdTexture = this._loadTextureWithFallback(
-            `${TEXTURE_BASE_URL}crowd.png`,
+            "crowd.png",
             new THREE.CanvasTexture(crowdFallback),
             { repeat: [2, 1] },
             () => { if (crowdFacade) crowdFacade.visible = false; },
@@ -831,7 +881,7 @@ export class Race3DRenderer {
         const rows = 6;
         const stepMat = new THREE.MeshStandardMaterial({ color: 0x3a5069, roughness: 0.8 });
         const crowdGeo = new THREE.BoxGeometry(0.55, 0.85, 0.42);
-        const perRow = 56;
+        const perRow = Math.round(56 * this.qualitySettings.crowdScale);
         const crowd = new THREE.InstancedMesh(
             crowdGeo,
             new THREE.MeshStandardMaterial({ roughness: 0.85 }),
@@ -1124,7 +1174,7 @@ export class Race3DRenderer {
 
     // 1着馬がゴールした瞬間に紙吹雪を舞わせる
     _spawnConfetti() {
-        const count = this.qualityLevel >= 3 ? 210 : 420;
+        const count = Math.round(420 * this.qualitySettings.particleScale);
         const rzC = this.layout.ry * CENTER_RZ_SCALE;
         const geo = new THREE.PlaneGeometry(0.6, 0.85);
         const mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), count);
