@@ -8,7 +8,7 @@ import {
     QualityAutoAdjuster,
 } from "./graphics-quality.js";
 
-const HORSE_MODEL_URL = "https://threejs.org/examples/models/gltf/Horse.glb";
+const HORSE_MODEL_URL = "./assets/models/horse.glb";
 const TRACK_LEN = 820;
 const VENUE_SCALE = 1.22;
 const CENTER_RX_SCALE = 0.13 * VENUE_SCALE;

@@ -11,7 +11,7 @@ import { makeRng } from "./rng.js";
 import { pickNames } from "./names.js";
 import { APP_VERSION, APP_BUILD } from "./version.js";
 
-const FB_VER = "10.12.2";
+const FIREBASE_BASE_URL = "../vendor/firebase/";
 const RESULT_WAIT_MS = 10 * 1000;     // 結果は10秒で自動的に次レースへ
 const BET_WAIT_MS = 2 * 60 * 1000;    // ベットは2分で締め切り自動スタート
 const REVIVE_BALANCE = 3000;
@@ -21,8 +21,8 @@ let fb = null;
 
 async function ensureDb() {
     if (fb) return fb;
-    const appMod = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app.js`);
-    const fsMod = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-firestore.js`);
+    const appMod = await import(`${FIREBASE_BASE_URL}firebase-app.js`);
+    const fsMod = await import(`${FIREBASE_BASE_URL}firebase-firestore.js`);
     const db = fsMod.getFirestore(appMod.initializeApp(firebaseConfig));
     fb = {
         db,
