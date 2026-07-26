@@ -128,4 +128,9 @@ node scripts/verify-online-scale.mjs
 - フレンド情報をサーバー側にも保存して別端末でも引き継ぐ
 - 馬名削除の取り消し機能を追加する
 - スマホ画面でのオンライン複数人プレイをさらに検証する
-- Service Worker を追加してオフラインでも遊べるPWAにする
+## オフライン対応
+
+初回オンライン起動時に必要な画面・スクリプト・3Dモデル・画像をService Workerへ保存し、
+以後は通信がない状態でもローカル対戦を最後まで遊べます。three.js、Firebase SDK、馬のGLBモデルは
+固定バージョンを `vendor/` と `assets/models/` に同梱しており、通常起動時にCDNへ接続しません。
+更新検知用の `src/version.js` とFirestore通信はService Workerのキャッシュ対象外です。

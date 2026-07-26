@@ -36,7 +36,10 @@ initOnline();
 
 // ---- ホーム画面の遷移 ----
 document.getElementById("go-local").addEventListener("click", enterLocalSetup);
-document.getElementById("go-online").addEventListener("click", enterOnlineHome);
+document.getElementById("go-online").addEventListener("click", () => {
+    enterOnlineHome();
+    checkVersion(() => { if (updateBanner) updateBanner.classList.remove("hidden"); });
+});
 document.getElementById("go-guide").addEventListener("click", () => {
     document.getElementById("guide-content").innerHTML =
         buildGuideHTML(buildBetTypes(PLACE_N), ABILITIES, STYLES, PLACE_N);
@@ -60,7 +63,6 @@ const badge = document.querySelector(".version-badge");
 if (badge) badge.textContent = "v" + APP_VERSION;
 const updateBanner = document.getElementById("update-banner");
 if (updateBanner) updateBanner.addEventListener("click", () => location.reload());
-checkVersion(() => { if (updateBanner) updateBanner.classList.remove("hidden"); });
 initGraphicsQualityUI();
 
 // 招待リンク or 前回の在室ルームがあれば自動で復帰、なければホーム
