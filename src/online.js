@@ -80,6 +80,11 @@ const o = {
     betCountdownTimer: null,
     betShownKey: null, playedRound: -1, playingRound: null, finishedRound: -1,
     resultShownSig: null, friendsSyncedAt: 0, hostRetryTimer: null,
+    // 部屋ドキュメントと players サブコレクションは別のリスナーで届き、
+    // 同じバッチの書き込みでも到着順は保証されない。
+    // 「players を何回受け取ったか」を数えて、部屋のフェーズだけが先に進んだ
+    // 状態（＝players が前ラウンドのまま）で判断してしまうのを防ぐ。
+    playersVersion: 0, bettingStartedVersion: -1, betSelfHealTimer: null,
     // ホストのフェーズ移行を「1ラウンドにつき1回だけ」に固定するための予約票。
     // これがないと、締め切り直後にスナップショットが連続して届いたときに
     // hostStartBetting() などが二重に走り、レースがやり直しになったり画面が固まる。
@@ -370,7 +375,7 @@ async function createRoom() {
         batch.set(roomDoc(), {
             host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0, createdAt: Date.now(),
         });
-        batch.set(playerDoc(), { name, balance: funds, betDone: false, tickets: [], bankrupt: false, readyNext: false });
+        batch.set(playerDoc(), { name, balance: funds, betDone: false, tickets: [], bankrupt: false, readyNext: false, round: 0 });
         await batch.commit();
     } catch (e) {
         o.code = null; o.isHost = false;
@@ -406,7 +411,7 @@ async function joinRoom() {
     resetRoundState();
     if (midGame) o.betShownKey = `${room.round}:${room.horseSeed || 0}`;
     try {
-        await fb.setDoc(playerDoc(), { name, balance: room.funds, betDone: midGame, tickets: [] }, { merge: true });
+        await fb.setDoc(playerDoc(), { name, balance: room.funds, betDone: midGame, tickets: [], round: room.round || 0 }, { merge: true });
     } catch (e) {
         o.code = null;
         alert(firestoreErrorMessage(e, "部屋に参加できませんでした"));
@@ -465,6 +470,8 @@ function doLeave() {
 // 部屋を移るときに、前の部屋のラウンド進行状態を持ち越さないようにする
 function resetRoundState() {
     if (o.hostRetryTimer) { clearTimeout(o.hostRetryTimer); o.hostRetryTimer = null; }
+    clearBetSelfHeal();
+    o.bettingStartedVersion = -1;
     o.claimed = {};
     o.betShownKey = null;
     o.playedRound = -1;
@@ -542,6 +549,7 @@ function subscribe() {
         const next = {};
         snap.forEach((playerSnap) => { next[playerSnap.id] = playerSnap.data(); });
         players = next;
+        o.playersVersion += 1;
         emit();
     }, onListenError("players"));
     o.unsub = () => { roomUnsub(); playersUnsub(); };
@@ -596,10 +604,20 @@ function onRoom(room) {
     if (room.phase === "race") trySettle();
 }
 
+// プレイヤードキュメントが現在のラウンドのものか。
+// round を持たない古いドキュメント（旧バージョンで作られた部屋）は現行扱いにして、
+// 更新途中の部屋が2分の締め切りまで進まなくなるのを避ける。
+function isCurrentRound(player, round) {
+    return player.round === undefined || player.round === round;
+}
+
 function allBet(room) {
     const ps = room.players || {};
     const ids = Object.keys(ps);
-    return ids.length > 0 && ids.every((id) => ps[id].betDone);
+    if (!ids.length) return false;
+    // 前ラウンドの betDone=true が残っているうちに「全員OK」と判定すると、
+    // 誰も賭けていないレースが即座に始まってしまう。
+    return ids.every((id) => isCurrentRound(ps[id], room.round) && ps[id].betDone);
 }
 
 // ---- ロビー ----
@@ -679,8 +697,10 @@ function hostStartBetting() {
             tickets: [],
             readyNext: false,
             reviveResult: fb.deleteField(),
+            round,   // このラウンドの状態であることの目印
         });
     });
+    o.bettingStartedVersion = o.playersVersion;
     batch.commit().catch(() => releaseClaim("betting", round));
 }
 
@@ -695,6 +715,10 @@ function showWait(room, title) {
 
 function handleBetting(room) {
     const me = room.players[uid];
+    // 自分の doc がまだ前ラウンドのままなら、追いつくまで画面を切り替えない。
+    // （前ラウンドの betDone=true で待機画面が一瞬出てしまうのを防ぐ）
+    if (!isCurrentRound(me, room.round)) { scheduleBetSelfHeal(room); return; }
+    clearBetSelfHeal();
     if (me.betDone) {
         const noTickets = !me.tickets || me.tickets.length === 0;
         o.betShownKey = null;   // 出し直しになったら再表示できるようにしておく
@@ -725,10 +749,31 @@ function handleBetting(room) {
         onComplete: (tickets) => {
             // 締め切り後や次ラウンド開始後の書き込みは捨てる（前ラウンドの買い目が混ざらないように）
             if (!o.room || o.room.phase !== "betting" || o.room.round !== room.round) return;
-            fb.updateDoc(playerDoc(), { tickets: tickets || [], betDone: true }).catch(() => {});
+            fb.updateDoc(playerDoc(), { tickets: tickets || [], betDone: true, round: room.round }).catch(() => {});
         },
     });
     startBetCountdown();
+}
+
+// ホストのベット開始バッチから漏れた場合（書き込み直前に参加したなど）に、
+// 自分のドキュメントを現在のラウンドへ自力で合わせる。
+// 通常の到着順のズレは1秒とかからず解消するので、少し待ってから実行する。
+function scheduleBetSelfHeal(room) {
+    if (o.betSelfHealTimer) return;
+    o.betSelfHealTimer = setTimeout(() => {
+        o.betSelfHealTimer = null;
+        const now = o.room;
+        if (!now || now.phase !== "betting" || now.round !== room.round) return;
+        const me = (now.players || {})[uid];
+        if (!me || isCurrentRound(me, now.round)) return;
+        fb.updateDoc(playerDoc(), {
+            round: now.round, betDone: false, tickets: [], readyNext: false,
+        }).catch(() => {});
+    }, 2500);
+}
+
+function clearBetSelfHeal() {
+    if (o.betSelfHealTimer) { clearTimeout(o.betSelfHealTimer); o.betSelfHealTimer = null; }
 }
 
 // ベット締め切りまでのカウントダウン表示
@@ -767,13 +812,21 @@ function startBetCountdown() {
 function clearBetTimers() {
     if (o.betCountdownTimer) { clearInterval(o.betCountdownTimer); o.betCountdownTimer = null; }
     if (o.betTimer) { clearTimeout(o.betTimer); o.betTimer = null; }
+    clearBetSelfHeal();
 }
 
 // ホスト：全員OK か 締め切り(2分) で自動的にレース開始
 function scheduleBetAdvance(room) {
     if (!o.isHost || !room || room.phase !== "betting") return;
     const deadline = room.betDeadlineAt || 0;
-    if (allBet(room) || (deadline && Date.now() >= deadline)) { hostStartRace(room); return; }
+    // ベット開始の書き込み後、players を1回でも受け取るまでは「全員OK」を信用しない。
+    // 部屋ドキュメントの方が先に届くため、ここを見ないと前ラウンドの betDone=true で
+    // 賭けられないレースが始まってしまう。
+    const playersFresh = o.playersVersion > o.bettingStartedVersion;
+    if ((playersFresh && allBet(room)) || (deadline && Date.now() >= deadline)) {
+        hostStartRace(room);
+        return;
+    }
     if (o.betTimer) clearTimeout(o.betTimer);
     if (deadline) {
         o.betTimer = setTimeout(() => {
@@ -883,6 +936,7 @@ function hostReset() {
             betDone: false,
             tickets: [],
             bankrupt: false,
+            round: room.round,
         });
     });
     batch.commit().catch(() => releaseClaim("reset", room.round));
