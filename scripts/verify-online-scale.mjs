@@ -1,3 +1,17 @@
+// オンライン対戦の同期方式の負荷を実 Firestore で測る。
+//
+// 旧方式（〜v0.18）: ホストだけが players を購読し、その全内容（買い目込み）を
+//   rooms/{code}.summary に書き戻して他の端末へ配っていた。
+//   → 誰か1人がベットするたびに部屋ドキュメントを丸ごと書き直すので、
+//     人数が増えるほど「1ドキュメント毎秒1書き込み」の目安を超えて詰まり、
+//     配信量も人数の2乗で増えていた。
+// 新方式（v0.19〜）: 全端末が players サブコレクションを直接購読する。
+//   → 部屋ドキュメントへの書き込みは1ラウンドあたり3回（ベット開始・レース開始・精算）で
+//     人数に依存しない。各端末が受け取るのも変更のあった1人分だけ。
+//
+// このスクリプトはその2点を実測で確認する。
+//   1. 部屋ドキュメントへの書き込み数が人数に依存しないこと
+//   2. 1端末あたりの受信ドキュメント数が人数比（2倍）ほどには増えないこと
 import { initializeApp, deleteApp } from "firebase/app";
 import {
     collection,
@@ -19,7 +33,6 @@ const firebaseConfig = {
 
 const CLIENT_COUNTS = [10, 20];
 const ROUNDS = 3;
-const SUMMARY_DEBOUNCE_MS = 300;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function waitFor(label, predicate, timeoutMs = 30000) {
@@ -33,23 +46,6 @@ async function waitFor(label, predicate, timeoutMs = 30000) {
     await sleep(350);
 }
 
-function summarize(players) {
-    const summary = {};
-    Object.keys(players).forEach((uid) => {
-        const player = players[uid];
-        summary[uid] = {
-            name: player.name,
-            balance: player.balance,
-            betDone: !!player.betDone,
-            tickets: player.tickets || [],
-            bankrupt: !!player.bankrupt,
-            readyNext: !!player.readyNext,
-            ...(player.reviveResult ? { reviveResult: player.reviveResult } : {}),
-        };
-    });
-    return summary;
-}
-
 async function runScenario(clientCount) {
     const roomCode = `ZZ${clientCount}${Date.now().toString(36).toUpperCase()}`;
     const apps = [];
@@ -57,16 +53,12 @@ async function runScenario(clientCount) {
     const unsubs = [];
     let roomCreated = false;
     let listenerError = null;
-    let summaryTimer = null;
-    let hostPlayers = {};
     const metrics = {
         gameplayWrites: 0,
         cleanupWrites: 0,
-        summaryWrites: 0,
-        roomSnapshotCallbacks: Array(clientCount).fill(0),
+        roomDocumentWrites: 0,
         roomDocumentsDelivered: Array(clientCount).fill(0),
-        hostPlayerSnapshotCallbacks: 0,
-        hostPlayerDocumentsDelivered: 0,
+        playerDocumentsDelivered: Array(clientCount).fill(0),
         maxConcurrentWritesToOneDocument: 0,
     };
 
@@ -78,6 +70,7 @@ async function runScenario(clientCount) {
     function recordWriteWave(paths, cleanup = false) {
         if (cleanup) metrics.cleanupWrites += paths.length;
         else metrics.gameplayWrites += paths.length;
+        metrics.roomDocumentWrites += paths.filter((path) => path === `rooms/${roomCode}`).length;
         const concentration = new Map();
         paths.forEach((path) => concentration.set(path, (concentration.get(path) || 0) + 1));
         metrics.maxConcurrentWritesToOneDocument = Math.max(
@@ -99,18 +92,21 @@ async function runScenario(clientCount) {
         recordWriteWave(paths, true);
     }
 
+    const allPlayers = (client) => Object.values(client.players);
+
     try {
         for (let i = 0; i < clientCount; i += 1) {
             const app = initializeApp(firebaseConfig, `online-scale-${roomCode}-${i}`);
             const db = getFirestore(app);
             apps.push(app);
-            clients.push({ db, room: null });
+            clients.push({ db, room: null, players: {} });
         }
 
         const hostDb = clients[0].db;
+
+        // 本番と同じく、全端末が部屋ドキュメントと players サブコレクションの両方を購読する
         for (let i = 0; i < clientCount; i += 1) {
             unsubs.push(onSnapshot(roomRef(clients[i].db), (snapshot) => {
-                metrics.roomSnapshotCallbacks[i] += 1;
                 if (snapshot.exists()) {
                     metrics.roomDocumentsDelivered[i] += 1;
                     clients[i].room = snapshot.data();
@@ -118,35 +114,16 @@ async function runScenario(clientCount) {
                     clients[i].room = null;
                 }
             }, (error) => { listenerError ||= error; }));
+
+            unsubs.push(onSnapshot(collection(clients[i].db, "rooms", roomCode, "players"), (snapshot) => {
+                const changes = snapshot.docChanges();
+                metrics.playerDocumentsDelivered[i] += changes.length;
+                changes.forEach((change) => {
+                    if (change.type === "removed") delete clients[i].players[change.doc.id];
+                    else clients[i].players[change.doc.id] = change.doc.data();
+                });
+            }, (error) => { listenerError ||= error; }));
         }
-
-        const publishSummary = async () => {
-            summaryTimer = null;
-            await updateDoc(roomRef(hostDb), {
-                summary: { players: summarize(hostPlayers), updatedAt: Date.now() },
-            });
-            metrics.summaryWrites += 1;
-            recordWriteWave([`rooms/${roomCode}`]);
-        };
-        const scheduleSummary = (immediate = false) => {
-            if (summaryTimer) clearTimeout(summaryTimer);
-            summaryTimer = setTimeout(() => {
-                publishSummary().catch((error) => { listenerError ||= error; });
-            }, immediate ? 0 : SUMMARY_DEBOUNCE_MS);
-        };
-
-        let firstHostSnapshot = true;
-        unsubs.push(onSnapshot(collection(hostDb, "rooms", roomCode, "players"), (snapshot) => {
-            metrics.hostPlayerSnapshotCallbacks += 1;
-            const changes = snapshot.docChanges();
-            metrics.hostPlayerDocumentsDelivered += changes.length;
-            changes.forEach((change) => {
-                if (change.type === "removed") delete hostPlayers[change.doc.id];
-                else hostPlayers[change.doc.id] = change.doc.data();
-            });
-            scheduleSummary(firstHostSnapshot);
-            firstHostSnapshot = false;
-        }, (error) => { listenerError ||= error; }));
 
         const setupBatch = writeBatch(hostDb);
         setupBatch.set(roomRef(hostDb), {
@@ -156,7 +133,7 @@ async function runScenario(clientCount) {
             round: 0,
             horseSeed: 0,
             raceSeed: 0,
-            summary: { players: {}, updatedAt: Date.now() },
+            createdAt: Date.now(),
         });
         const setupPaths = [`rooms/${roomCode}`];
         for (let i = 0; i < clientCount; i += 1) {
@@ -165,34 +142,31 @@ async function runScenario(clientCount) {
                 balance: 3000,
                 betDone: false,
                 tickets: [],
+                bankrupt: false,
+                readyNext: false,
             });
             setupPaths.push(pathForPlayer(i));
         }
         await setupBatch.commit();
         roomCreated = true;
         recordWriteWave(setupPaths);
-        await waitFor(`${clientCount}人の summary 初期配信`, () => (
-            clients.every((client) => Object.keys(client.room?.summary?.players || {}).length === clientCount)
+        await waitFor(`${clientCount}人の初期配信`, () => (
+            clients.every((client) => Object.keys(client.players).length === clientCount)
         ));
 
         for (let round = 1; round <= ROUNDS; round += 1) {
+            // ベット開始：部屋ドキュメントはフェーズとシードだけ（summary を持たない）
             const startBatch = writeBatch(hostDb);
-            const resetPlayers = Object.fromEntries(
-                Object.entries(hostPlayers).map(([uid, player]) => [
-                    uid,
-                    { ...player, betDone: false, tickets: [], readyNext: false },
-                ]),
-            );
             startBatch.update(roomRef(hostDb), {
                 phase: "betting",
                 round,
                 horseSeed: round * 1000,
                 raceSeed: 0,
-                summary: { players: summarize(resetPlayers), updatedAt: Date.now() },
+                betDeadlineAt: Date.now() + 120000,
             });
             const startPaths = [`rooms/${roomCode}`];
             for (let i = 0; i < clientCount; i += 1) {
-                startBatch.update(playerRef(hostDb, uidAt(i)), { betDone: false, tickets: [] });
+                startBatch.update(playerRef(hostDb, uidAt(i)), { betDone: false, tickets: [], readyNext: false });
                 startPaths.push(pathForPlayer(i));
             }
             await startBatch.commit();
@@ -201,6 +175,7 @@ async function runScenario(clientCount) {
                 clients.every((client) => client.room?.phase === "betting" && client.room?.round === round)
             ));
 
+            // 各自が自分のドキュメントだけを書く（部屋ドキュメントには触らない）
             const betPaths = [];
             await Promise.all(clients.map(({ db }, i) => {
                 betPaths.push(pathForPlayer(i));
@@ -212,31 +187,22 @@ async function runScenario(clientCount) {
             recordWriteWave(betPaths);
             await waitFor(`第${round}ラウンド全員ベット`, () => (
                 clients.every((client) => (
-                    Object.values(client.room?.summary?.players || {}).every((player) => player.betDone)
+                    allPlayers(client).length === clientCount
+                    && allPlayers(client).every((player) => player.betDone)
                 ))
             ));
 
-            await updateDoc(roomRef(hostDb), {
-                phase: "race",
-                raceSeed: round * 1000 + 1,
-                summary: { players: summarize(hostPlayers), updatedAt: Date.now() },
-            });
+            await updateDoc(roomRef(hostDb), { phase: "race", raceSeed: round * 1000 + 1 });
             recordWriteWave([`rooms/${roomCode}`]);
             await waitFor(`第${round}ラウンドレース開始`, () => (
                 clients.every((client) => client.room?.phase === "race")
             ));
 
             const settleBatch = writeBatch(hostDb);
-            const settledPlayers = Object.fromEntries(
-                Object.entries(hostPlayers).map(([uid, player]) => [
-                    uid,
-                    { ...player, balance: 2900 + round, bankrupt: false, readyNext: false },
-                ]),
-            );
             settleBatch.update(roomRef(hostDb), {
                 phase: "result",
                 resultDeadlineAt: Date.now() + 10000,
-                summary: { players: summarize(settledPlayers), updatedAt: Date.now() },
+                gameOver: false,
             });
             const settlePaths = [`rooms/${roomCode}`];
             for (let i = 0; i < clientCount; i += 1) {
@@ -252,32 +218,31 @@ async function runScenario(clientCount) {
             await waitFor(`第${round}ラウンド精算`, () => (
                 clients.every((client) => (
                     client.room?.phase === "result"
-                    && Object.values(client.room?.summary?.players || {}).every((player) => player.balance === 2900 + round)
+                    && allPlayers(client).every((player) => player.balance === 2900 + round)
                 ))
             ));
         }
 
         if (listenerError) throw listenerError;
-        const nonHostDeliveries = metrics.roomDocumentsDelivered.slice(1);
+        const perClientDeliveries = metrics.roomDocumentsDelivered.map(
+            (rooms, i) => rooms + metrics.playerDocumentsDelivered[i],
+        );
         return {
             projectId: firebaseConfig.projectId,
             roomCode,
             clients: clientCount,
             rounds: ROUNDS,
             gameplayWrites: metrics.gameplayWrites,
-            summaryWrites: metrics.summaryWrites,
-            totalRoomDocumentsDelivered: metrics.roomDocumentsDelivered.reduce((sum, value) => sum + value, 0),
-            nonHostRoomDocumentsDelivered: nonHostDeliveries,
-            averageRoomDocumentsPerNonHost: Number((
-                nonHostDeliveries.reduce((sum, value) => sum + value, 0) / nonHostDeliveries.length
+            // 部屋ドキュメントへの書き込み。人数に依存しないのが新方式の要点。
+            roomDocumentWrites: metrics.roomDocumentWrites,
+            roomDocumentWritesPerRound: Number((metrics.roomDocumentWrites / ROUNDS).toFixed(2)),
+            averageDocumentsDeliveredPerClient: Number((
+                perClientDeliveries.reduce((sum, value) => sum + value, 0) / clientCount
             ).toFixed(2)),
-            maxRoomDocumentsPerNonHost: Math.max(...nonHostDeliveries),
-            hostPlayerSnapshotCallbacks: metrics.hostPlayerSnapshotCallbacks,
-            hostPlayerDocumentsDelivered: metrics.hostPlayerDocumentsDelivered,
+            maxDocumentsDeliveredPerClient: Math.max(...perClientDeliveries),
             maxConcurrentWritesToOneDocument: metrics.maxConcurrentWritesToOneDocument,
         };
     } finally {
-        if (summaryTimer) clearTimeout(summaryTimer);
         unsubs.forEach((unsub) => unsub());
         if (roomCreated && clients[0]) {
             await cleanup(clients[0].db).catch((error) => console.error("検証ルームの削除に失敗:", error));
@@ -293,22 +258,26 @@ for (const clientCount of CLIENT_COUNTS) {
 
 const ten = results.find((result) => result.clients === 10);
 const twenty = results.find((result) => result.clients === 20);
-const perNonHostGrowthRatio = Number((
-    twenty.averageRoomDocumentsPerNonHost / ten.averageRoomDocumentsPerNonHost
+const perClientGrowthRatio = Number((
+    twenty.averageDocumentsDeliveredPerClient / ten.averageDocumentsDeliveredPerClient
 ).toFixed(3));
+// 部屋ドキュメントの書き込みは人数に関係なく「1ラウンド3回」で一定のはず
+const roomWritesAreFlat = ten.roomDocumentWrites === twenty.roomDocumentWrites;
 
 console.log(JSON.stringify({
     projectId: firebaseConfig.projectId,
-    design: "host-aggregates-players-and-non-hosts-subscribe-room-summary-only",
+    design: "every-client-subscribes-players-subcollection-directly",
     results,
     comparison: {
         clientsRatio: 2,
-        averageRoomDocumentsPerNonHostGrowthRatio: perNonHostGrowthRatio,
-        nonHostDeliveryIsNotQuadratic: perNonHostGrowthRatio < 1.5,
+        averageDocumentsDeliveredPerClientGrowthRatio: perClientGrowthRatio,
+        // 人数2倍で配信量も約2倍まで（＝人数に比例）。2乗で増えていないことを見る。
+        perClientDeliveryIsNotQuadratic: perClientGrowthRatio < 2.5,
+        roomDocumentWritesAreIndependentOfPlayerCount: roomWritesAreFlat,
         maxConcurrentWritesToOneDocument: Math.max(
             ...results.map((result) => result.maxConcurrentWritesToOneDocument),
         ),
     },
 }, null, 2));
 
-if (perNonHostGrowthRatio >= 1.5) process.exitCode = 1;
+if (perClientGrowthRatio >= 2.5 || !roomWritesAreFlat) process.exitCode = 1;

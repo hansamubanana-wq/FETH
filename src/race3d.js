@@ -9,6 +9,87 @@ import {
 } from "./graphics-quality.js";
 
 const HORSE_MODEL_URL = "./assets/models/horse.glb";
+
+// 馬のGLBはレースごとに変わらないので1回だけ読んで使い回す。
+// （毎レース読み直すと、そのたびにパースとGPUアップロードが走って重い）
+let horseGltfPromise = null;
+function loadHorseGltf(onProgress) {
+    if (!horseGltfPromise) {
+        horseGltfPromise = new Promise((resolve, reject) => {
+            new GLTFLoader().load(HORSE_MODEL_URL, resolve, (event) => {
+                if (event.total) onProgress?.(event.loaded / event.total);
+            }, reject);
+        }).then((gltf) => { markShared(gltf.scene); return gltf; })
+          .catch((error) => { horseGltfPromise = null; throw error; });
+    } else {
+        onProgress?.(1);
+    }
+    return horseGltfPromise;
+}
+
+// SkeletonUtils.clone() はジオメトリを共有し、clone したマテリアルもテクスチャを共有する。
+// 使い回すオリジナル側の資源に印を付けておき、レース終了時の解放から除外する。
+function markShared(root) {
+    root.traverse((obj) => {
+        if (!obj.geometry && !obj.material) return;
+        if (obj.geometry) obj.geometry.userData.__shared = true;
+        const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const material of materials) {
+            if (!material) continue;
+            for (const value of Object.values(material)) {
+                if (value && value.isTexture) value.userData.__shared = true;
+            }
+        }
+    });
+}
+
+// WebGLRenderer は canvas につき1つを使い回す。
+// レースごとに作り直すと、three が内部で持つ既定テクスチャや各種キャッシュが
+// レンダラーの数だけ GL コンテキストに積み上がっていく（dispose では消えない）。
+let sharedRenderer = null;
+function getSharedRenderer(canvas) {
+    if (sharedRenderer && sharedRenderer.domElement === canvas) return sharedRenderer;
+    sharedRenderer?.dispose();
+    sharedRenderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance",
+    });
+    return sharedRenderer;
+}
+
+// シーン配下のジオメトリ/マテリアル/テクスチャをまとめて解放する。
+// 使い回している GLB のオリジナル（キャッシュ）はシーンに入れていないので巻き込まれない。
+function disposeMaterial(material) {
+    if (!material) return;
+    for (const value of Object.values(material)) {
+        if (value && value.isTexture && !value.userData.__shared) value.dispose();
+    }
+    material.dispose();
+}
+function disposeSceneGraph(root) {
+    root.traverse((obj) => {
+        // インスタンス行列/色は geometry とは別のバッファなので個別に解放する
+        if (obj.isInstancedMesh) obj.dispose();
+        // スキンメッシュはクローンごとにボーンテクスチャを持つ
+        if (obj.isSkinnedMesh && obj.skeleton) {
+            obj.skeleton.boneTexture?.dispose();
+            obj.skeleton.dispose?.();
+        }
+        // 影を落とすライトはシャドウマップ（レンダーターゲット）を抱えている
+        if (obj.isLight && obj.shadow?.map) {
+            obj.shadow.map.dispose();
+            obj.shadow.map = null;
+        }
+        if (obj.isMesh || obj.isPoints || obj.isLine || obj.isSprite) {
+            // Sprite のジオメトリは three が全スプライトで共有しているので触らない
+            if (obj.geometry && !obj.isSprite && !obj.geometry.userData.__shared) obj.geometry.dispose();
+            if (Array.isArray(obj.material)) obj.material.forEach(disposeMaterial);
+            else disposeMaterial(obj.material);
+        }
+    });
+}
 const TRACK_LEN = 820;
 const VENUE_SCALE = 1.22;
 const CENTER_RX_SCALE = 0.13 * VENUE_SCALE;
@@ -74,12 +155,7 @@ export class Race3DRenderer {
         this.camera.up.set(0, 0, -1);
         this.camera.lookAt(0, 0, 0);
 
-        this.renderer = new THREE.WebGLRenderer({
-            canvas,
-            antialias: true,
-            alpha: false,
-            powerPreference: "high-performance",
-        });
+        this.renderer = getSharedRenderer(canvas);
         this.textureRegistry = [];
         this.qualityPreference = getQualityPreference();
         this.capabilityProfile = profileGraphicsCapability({
@@ -95,6 +171,7 @@ export class Race3DRenderer {
             : null;
         this.performanceSample = { startedAt: performance.now(), frames: 0 };
         this.performanceHistory = [];
+        this._sizeW = this._sizeH = this._sizePR = -1;  // 使い回しのレンダラーでも必ずサイズを入れ直す
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualitySettings.pixelRatio));
         this.renderer.shadowMap.enabled = this.qualitySettings.shadows;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -115,6 +192,12 @@ export class Race3DRenderer {
         const rect = this.canvas.getBoundingClientRect();
         const width = Math.max(320, Math.floor(rect.width || this.canvas.clientWidth || 960));
         const height = Math.max(240, Math.floor(width * 0.5625));
+        // setSize() は canvas.width への代入を伴い、同じ値でも描画バッファが作り直される。
+        // 毎フレーム呼ぶと重いので、実際にサイズが変わったときだけ適用する。
+        if (this._sizeW === width && this._sizeH === height && this._sizePR === this.renderer.getPixelRatio()) return;
+        this._sizeW = width;
+        this._sizeH = height;
+        this._sizePR = this.renderer.getPixelRatio();
         this.renderer.setSize(width, height, false);
         this.aspect = width / height;
         this._applyFrustum();
@@ -207,6 +290,7 @@ export class Race3DRenderer {
     }
 
     render(distances, elapsed = 0) {
+        if (this._disposed) return;
         this.resize();
         const dt = Math.min(0.05, this.clock.getDelta());
         // 再生尺の短縮率と同期させ、脚だけがゆっくり見えたり早送りに見えたりするのを防ぐ。
@@ -305,12 +389,45 @@ export class Race3DRenderer {
         this._monitorPerformance();
     }
 
+    // レースが終わる（または中断される）たびに必ず呼ぶ。
+    // 呼ばないと 1 レースごとにシーン一式（テクスチャ・ジオメトリ・GLBクローン）が
+    // GPU に残り続け、オンラインで何レースも回すと重くなって最後は固まる。
     dispose() {
+        if (this._disposed) return;
+        this._disposed = true;
+
+        for (const mixer of this.mixers) {
+            mixer.stopAllAction();
+            mixer.uncacheRoot(mixer.getRoot());
+        }
+        this.mixers.length = 0;
+
         if (this.spray?.mesh) {
             this.spray.mesh.geometry.dispose();
             this.spray.mesh.material.dispose();
         }
-        this.renderer.dispose();
+        this.confetti = null;
+        for (const entry of this.textureRegistry) entry.texture?.dispose();
+        this.textureRegistry.length = 0;
+
+        disposeSceneGraph(this.scene);
+        this.scene.clear();
+
+        this.horseGroups.length = 0;
+        this.numberPlates.length = 0;
+        this.boostLabels.length = 0;
+        this.boostRings.length = 0;
+        this.clouds.length = 0;
+        this.flags.length = 0;
+        this.startDoors.length = 0;
+        this.visionTexture = null;
+        this.visionCtx = null;
+        this.autoAdjuster = null;
+
+        // レンダラー本体は使い回すので破棄しない。描画リストの参照だけ落とす。
+        this.renderer.renderLists?.dispose?.();
+        this.renderer.renderStates?.dispose?.();
+        if (window.__lastRace3D === this) window.__lastRace3D = null;
     }
 
     beginPerformanceMonitoring() {
@@ -358,6 +475,7 @@ export class Race3DRenderer {
             if (object.isMesh) object.castShadow = this.qualitySettings.shadows && object.userData.castShadow !== false;
         });
         this._refreshTierTextures();
+        this._sizeW = this._sizeH = this._sizePR = -1;   // ピクセル比が変わったので再適用させる
         this.resize();
         console.info("3D quality changed", { tier, ...detail });
     }
@@ -1242,6 +1360,8 @@ export class Race3DRenderer {
         c.mesh.instanceMatrix.needsUpdate = true;
         if (c.life > 7) {
             this.scene.remove(c.mesh);
+            c.mesh.geometry.dispose();
+            c.mesh.material.dispose();
             c.mesh.dispose();
             this.confetti = null;
         }
@@ -1250,14 +1370,12 @@ export class Race3DRenderer {
     async _loadHorseModel() {
         this.onProgress?.(0.08);
         try {
-            const gltf = await new Promise((resolve, reject) => {
-                new GLTFLoader().load(HORSE_MODEL_URL, resolve, (event) => {
-                    if (event.total) this.onProgress?.(Math.min(0.92, 0.08 + (event.loaded / event.total) * 0.84));
-                }, reject);
-            });
+            const gltf = await loadHorseGltf((ratio) => this.onProgress?.(Math.min(0.92, 0.08 + ratio * 0.84)));
+            if (this._disposed) return;
             this._createHorses(gltf.scene, gltf.animations);
         } catch (error) {
             console.warn("Horse GLB failed to load, using local fallback.", error);
+            if (this._disposed) return;
             this._createHorses(this._fallbackHorse(), []);
         }
         this.ready = true;

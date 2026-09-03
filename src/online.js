@@ -4,7 +4,7 @@
 import { firebaseConfig } from "./firebase-config.js";
 import { buildRace, settleTickets, bestPerType, NUM_HORSES } from "./engine.js";
 import { startBetPanel } from "./betui.js";
-import { playRace, renderResult } from "./raceui.js";
+import { playRace, renderResult, stopRacePlayback } from "./raceui.js";
 import { showScreen, randomSeed } from "./ui.js";
 import { simulateRaceData } from "./race.js";
 import { makeRng } from "./rng.js";
@@ -15,7 +15,6 @@ const FIREBASE_BASE_URL = "../vendor/firebase/";
 const RESULT_WAIT_MS = 10 * 1000;     // 結果は10秒で自動的に次レースへ
 const BET_WAIT_MS = 2 * 60 * 1000;    // ベットは2分で締め切り自動スタート
 const REVIVE_BALANCE = 3000;
-const SUMMARY_DEBOUNCE_MS = 300;
 const configured = !!firebaseConfig.projectId;
 let fb = null;
 
@@ -74,38 +73,41 @@ function rememberFriends(players) {
 const o = {
     code: null, isHost: false, room: null,
     engine: null, engineSeed: null, unsub: null,
-    playersUnsub: null, summaryTimer: null,
     inviteUnsub: null,
     resultTimer: null,
     countdownTimer: null,
     betTimer: null,
     betCountdownTimer: null,
-    betShownRound: -1, playedRound: -1, finishedRound: -1, settledRound: -1, raceStartedRound: -1, resultShownRound: -1,
+    betShownKey: null, playedRound: -1, playingRound: null, finishedRound: -1,
+    resultShownSig: null, friendsSyncedAt: 0, hostRetryTimer: null,
+    // ホストのフェーズ移行を「1ラウンドにつき1回だけ」に固定するための予約票。
+    // これがないと、締め切り直後にスナップショットが連続して届いたときに
+    // hostStartBetting() などが二重に走り、レースがやり直しになったり画面が固まる。
+    claimed: {},
 };
+
+function claimOnce(kind, value) {
+    if (o.claimed[kind] === value) return false;
+    o.claimed[kind] = value;
+    return true;
+}
+function releaseClaim(kind, value) {
+    if (o.claimed[kind] === value) delete o.claimed[kind];
+    // 予約票を返したあと新しいスナップショットが来ないと進行が止まったままになるので、
+    // 同じ部屋状態でもう一度だけ進行判定をやり直す。
+    scheduleHostRetry();
+}
+function scheduleHostRetry() {
+    if (o.hostRetryTimer) return;
+    o.hostRetryTimer = setTimeout(() => {
+        o.hostRetryTimer = null;
+        if (o.room) onRoom(o.room);
+    }, 1500);
+}
 
 function roomDoc() { return fb.doc(fb.db, "rooms", o.code); }
 function playersCollection() { return fb.collection(fb.db, "rooms", o.code, "players"); }
 function playerDoc(id = uid) { return fb.doc(fb.db, "rooms", o.code, "players", id); }
-function playerSummary(players) {
-    const summary = {};
-    Object.keys(players || {}).forEach((id) => {
-        const p = players[id] || {};
-        summary[id] = {
-            name: p.name || "",
-            balance: Number(p.balance) || 0,
-            betDone: !!p.betDone,
-            tickets: Array.isArray(p.tickets) ? p.tickets : [],
-            bankrupt: !!p.bankrupt,
-            readyNext: !!p.readyNext,
-            ...(p.reviveResult ? { reviveResult: p.reviveResult } : {}),
-            ...(Number.isFinite(p.rank) ? { rank: p.rank } : {}),
-        };
-    });
-    return summary;
-}
-function roomPlayers(room) {
-    return (room && room.summary && room.summary.players) || {};
-}
 function randomCode() {
     const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let s = "";
@@ -253,6 +255,10 @@ function renderFriendBox(id, canInvite) {
     const box = document.getElementById(id);
     if (!box) return;
     const friends = getFriends();
+    // ロビーはスナップショットのたびに再描画されるので、中身が同じなら作り直さない
+    const sig = friends.map((f) => `${f.id}:${f.name}`).join("|");
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
     box.innerHTML = "";
     if (!friends.length) { box.classList.add("hidden"); return; }
     box.classList.remove("hidden");
@@ -358,18 +364,13 @@ async function createRoom() {
     await syncProfile().catch(() => {});
     o.code = randomCode();
     o.isHost = true;
+    resetRoundState();
     try {
         const batch = fb.writeBatch(fb.db);
         batch.set(roomDoc(), {
-            host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0,
-            summary: {
-                players: {
-                    [uid]: { name, balance: funds, betDone: false, tickets: [], bankrupt: false, readyNext: false },
-                },
-                updatedAt: Date.now(),
-            },
+            host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0, createdAt: Date.now(),
         });
-        batch.set(playerDoc(), { name, balance: funds, betDone: false, tickets: [] });
+        batch.set(playerDoc(), { name, balance: funds, betDone: false, tickets: [], bankrupt: false, readyNext: false });
         await batch.commit();
     } catch (e) {
         o.code = null; o.isHost = false;
@@ -402,7 +403,8 @@ async function joinRoom() {
     // ロビー以外（ベット/レース/結果）で参加した人は、今回は観戦して次レースから合流。
     // betDone=true にしておくと進行中のレースをブロックしない。
     const midGame = room.phase !== "lobby";
-    if (midGame) o.betShownRound = room.round;
+    resetRoundState();
+    if (midGame) o.betShownKey = `${room.round}:${room.horseSeed || 0}`;
     try {
         await fb.setDoc(playerDoc(), { name, balance: room.funds, betDone: midGame, tickets: [] }, { merge: true });
     } catch (e) {
@@ -436,23 +438,18 @@ function onLeaveClick() {
 function doLeave() {
     clearResultTimers();
     clearBetTimers();
+    stopRacePlayback();
     if (o.unsub) { o.unsub(); o.unsub = null; }
     if (fb && o.code) {
-        const onlyMe = o.room && Object.keys(o.room.players || {}).filter((id) => id !== uid).length === 0;
-        if (onlyMe) {
+        const others = Object.keys((o.room && o.room.players) || {}).filter((id) => id !== uid);
+        if (o.room && !others.length) {
             const batch = fb.writeBatch(fb.db);
             batch.delete(playerDoc());
             batch.delete(roomDoc());
             batch.commit().catch(() => {});                            // 最後の1人なら部屋ごと削除
-        } else if (o.isHost) {
-            const remaining = { ...(o.room.players || {}) };
-            delete remaining[uid];
-            const nextHost = Object.keys(remaining).sort()[0];
+        } else if (o.isHost && others.length) {
             const batch = fb.writeBatch(fb.db);
-            batch.update(roomDoc(), {
-                host: nextHost,
-                summary: { players: playerSummary(remaining), updatedAt: Date.now() },
-            });
+            batch.update(roomDoc(), { host: others.sort()[0] });
             batch.delete(playerDoc());
             batch.commit().catch(() => {});
         } else {
@@ -460,8 +457,21 @@ function doLeave() {
         }
     }
     o.code = null; o.room = null; o.isHost = false; o.engine = null; o.engineSeed = null;
+    resetRoundState();
     clearActive();
     showScreen("screen-online-home");
+}
+
+// 部屋を移るときに、前の部屋のラウンド進行状態を持ち越さないようにする
+function resetRoundState() {
+    if (o.hostRetryTimer) { clearTimeout(o.hostRetryTimer); o.hostRetryTimer = null; }
+    o.claimed = {};
+    o.betShownKey = null;
+    o.playedRound = -1;
+    o.playingRound = null;
+    o.finishedRound = -1;
+    o.resultShownSig = null;
+    o.friendsSyncedAt = 0;
 }
 
 // 起動時：URLの ?room= か、前回の在室ルームに自動再接続する
@@ -484,6 +494,7 @@ export async function reconnectIfPossible() {
         o.code = code;
         const [roomSnap, playerSnap] = await Promise.all([fb.getDoc(roomDoc()), fb.getDoc(playerDoc())]);
         if (roomSnap.exists() && playerSnap.exists()) {
+            resetRoundState();
             o.isHost = (roomSnap.data().host === uid);
             subscribe();
             return true;
@@ -493,57 +504,47 @@ export async function reconnectIfPossible() {
     return false;
 }
 
+// 全端末が players サブコレクションを直接購読する。
+//
+// 以前はホストだけが players を購読し、その全内容（買い目を含む）を
+// rooms/{code}.summary に書き戻して他の端末へ配っていた。この方式だと
+//   ・誰かが1回ベットするたびに部屋ドキュメントを丸ごと書き直す
+//     → Firestore の「1ドキュメントあたり毎秒1書き込み」の目安を軽く超えて詰まる
+//   ・配られる量が人数の2乗で増える（N人分の買い目 × N人へ配信）
+//   ・ホストが1台でも重いと全員の進行が止まる
+// ので、大人数だと「重い・固まる」の直接の原因になっていた。
+// 直接購読なら書き込みは各自1件、受信は変更のあった1人分だけになる。
 function subscribe() {
     if (o.unsub) o.unsub();
     let roomData = null;
-    let players = {};
-    const clearPlayersSubscription = () => {
-        if (o.playersUnsub) { o.playersUnsub(); o.playersUnsub = null; }
-        if (o.summaryTimer) { clearTimeout(o.summaryTimer); o.summaryTimer = null; }
-    };
-    const publishSummary = () => {
-        if (!roomData || roomData.host !== uid) return;
-        fb.updateDoc(roomDoc(), {
-            summary: { players: playerSummary(players), updatedAt: Date.now() },
-        }).catch(() => {});
-    };
-    const scheduleSummary = (immediate = false) => {
-        if (o.summaryTimer) clearTimeout(o.summaryTimer);
-        o.summaryTimer = setTimeout(() => {
-            o.summaryTimer = null;
-            publishSummary();
-        }, immediate ? 0 : SUMMARY_DEBOUNCE_MS);
-    };
+    let players = null;   // null = 最初のスナップショット待ち
+    let joined = false;
+
     const emit = () => {
         if (!roomData) { onRoom(null); return; }
-        const visiblePlayers = roomData.host === uid ? players : roomPlayers(roomData);
-        // 参加直後はホストが summary に反映するまで待つ。
-        if (!visiblePlayers[uid]) return;
-        onRoom({ ...roomData, players: visiblePlayers });
-    };
-    const syncRoleSubscription = () => {
-        const shouldHost = roomData && roomData.host === uid;
-        if (!shouldHost) {
-            clearPlayersSubscription();
-            players = {};
-            return;
+        if (!players) return;
+        if (!joined) {
+            if (!players[uid]) return;   // 自分の参加が反映されるまで待つ
+            joined = true;
         }
-        if (o.playersUnsub) return;
-        let firstSnapshot = true;
-        o.playersUnsub = fb.onSnapshot(playersCollection(), (snap) => {
-            players = {};
-            snap.forEach((playerSnap) => { players[playerSnap.id] = playerSnap.data(); });
-            scheduleSummary(firstSnapshot);
-            firstSnapshot = false;
-            emit();
-        });
+        onRoom({ ...roomData, players });
+    };
+
+    const onListenError = (where) => (error) => {
+        // 権限不足や切断を握りつぶすと、画面が進まない理由が分からなくなる
+        console.error(`Firestore listen error (${where})`, error);
     };
     const roomUnsub = fb.onSnapshot(roomDoc(), (snap) => {
         roomData = snap.exists() ? snap.data() : null;
-        syncRoleSubscription();
         emit();
-    });
-    o.unsub = () => { roomUnsub(); clearPlayersSubscription(); };
+    }, onListenError("room"));
+    const playersUnsub = fb.onSnapshot(playersCollection(), (snap) => {
+        const next = {};
+        snap.forEach((playerSnap) => { next[playerSnap.id] = playerSnap.data(); });
+        players = next;
+        emit();
+    }, onListenError("players"));
+    o.unsub = () => { roomUnsub(); playersUnsub(); };
 }
 
 function clampFunds(v) {
@@ -556,12 +557,18 @@ function onRoom(room) {
     o.room = room;
     const players = room.players || {};
     if (!players[uid]) { doLeave(); return; }
-    rememberFriends(players);
+    // 毎スナップショットで localStorage を読み書きすると大人数のとき無視できない負荷になる
+    if (Date.now() - o.friendsSyncedAt > 10000) {
+        o.friendsSyncedAt = Date.now();
+        rememberFriends(players);
+    }
 
     // ホストが抜けていたら、残っているうち最若番が引き継ぐ（進行が止まらないように）
     if (!players[room.host]) {
         const ids = Object.keys(players).sort();
-        if (ids[0] === uid) fb.updateDoc(roomDoc(), { host: uid });
+        if (ids[0] === uid && claimOnce("takeover", room.host)) {
+            fb.updateDoc(roomDoc(), { host: uid }).catch(() => releaseClaim("takeover", room.host));
+        }
     }
     o.isHost = (room.host === uid);
 
@@ -569,6 +576,10 @@ function onRoom(room) {
         o.engine = buildRace(room.horseSeed, room.names || null);
         o.engineSeed = room.horseSeed;
     }
+
+    // 再生中にラウンドが進んでしまったら、古いレース映像を止めて3D資源を解放する。
+    // 放置すると次のレースと二重に走って重くなる。
+    if (o.playingRound !== null && o.playingRound !== room.round) stopRacePlayback();
 
     switch (room.phase) {
         case "lobby": renderLobby(room); break;
@@ -610,8 +621,17 @@ function renderLobby(room) {
 
 function renderPlayerList(elId, room, statusFn) {
     const el = document.getElementById(elId);
-    el.innerHTML = "";
     const ps = room.players || {};
+    // 人数が多いとスナップショットのたびに全行を作り直すのが効いてくるので、
+    // 表示内容が変わっていないときは何もしない。
+    const ids = Object.keys(ps).sort();
+    const sig = ids.map((id) => {
+        const p = ps[id];
+        return `${id}:${p.name}:${p.balance}:${p.betDone ? 1 : 0}:${p.bankrupt ? 1 : 0}`;
+    }).join("|") + `#${room.host}`;
+    if (el.dataset.sig === sig) return;
+    el.dataset.sig = sig;
+    el.innerHTML = "";
     Object.keys(ps).forEach((id) => {
         const p = ps[id];
         const li = document.createElement("li");
@@ -637,18 +657,13 @@ function renderPlayerList(elId, room, statusFn) {
 
 // ---- ベット ----
 function hostStartBetting() {
-    const round = (o.room.round || 0) + 1;
+    const room = o.room;
+    if (!room) return;
+    const round = (room.round || 0) + 1;
+    // 予約票がないと、締め切り直後にスナップショットが立て続けに届いたときに
+    // ここが二重に走って horseSeed が引き直され、ベット画面が固まる原因になる。
+    if (!claimOnce("betting", round)) return;
     const batch = fb.writeBatch(fb.db);
-    const nextPlayers = {};
-    Object.keys(o.room.players || {}).forEach((id) => {
-        nextPlayers[id] = {
-            ...o.room.players[id],
-            betDone: false,
-            tickets: [],
-            readyNext: false,
-        };
-        delete nextPlayers[id].reviveResult;
-    });
     batch.update(roomDoc(), {
         phase: "betting",
         round,
@@ -657,9 +672,8 @@ function hostStartBetting() {
         names: pickNames(NUM_HORSES),
         resultDeadlineAt: fb.deleteField(),
         betDeadlineAt: Date.now() + BET_WAIT_MS,
-        summary: { players: playerSummary(nextPlayers), updatedAt: Date.now() },
     });
-    Object.keys(o.room.players || {}).forEach((id) => {
+    Object.keys(room.players || {}).forEach((id) => {
         batch.update(playerDoc(id), {
             betDone: false,
             tickets: [],
@@ -667,7 +681,7 @@ function hostStartBetting() {
             reviveResult: fb.deleteField(),
         });
     });
-    batch.commit();
+    batch.commit().catch(() => releaseClaim("betting", round));
 }
 
 function showWait(room, title) {
@@ -683,12 +697,22 @@ function handleBetting(room) {
     const me = room.players[uid];
     if (me.betDone) {
         const noTickets = !me.tickets || me.tickets.length === 0;
+        o.betShownKey = null;   // 出し直しになったら再表示できるようにしておく
         showWait(room, noTickets ? "次のレースまで観戦中" : "他のプレイヤーを待っています");
         startBetCountdown();
         return;
     }
-    if (o.betShownRound === room.round || !o.engine) { startBetCountdown(); return; }
-    o.betShownRound = room.round;
+    if (!o.engine) { startBetCountdown(); return; }
+
+    // ラウンドだけで判定していると、
+    //   ・betDone がサーバー側で false に戻された
+    //   ・同じラウンドで horseSeed が引き直された
+    // ときにベット画面が出ないまま待機画面で止まってしまう（＝固まる）。
+    // 「どの馬立てを、いま実際に表示しているか」で判定する。
+    const key = `${room.round}:${room.horseSeed || 0}`;
+    const pickVisible = document.getElementById("screen-pick")?.classList.contains("active");
+    if (o.betShownKey === key && pickVisible) { startBetCountdown(); return; }
+    o.betShownKey = key;
 
     document.getElementById("name-wrap").classList.add("hidden");
     o._pickTitleBase = me.bankrupt ? `${me.name} さんの復活チャレンジ` : `${me.name} さんの賭け`;
@@ -698,10 +722,11 @@ function handleBetting(room) {
         engine: o.engine,
         balance: me.bankrupt ? 0 : me.balance,
         reviveMode: !!me.bankrupt,
-        onComplete: (tickets) => fb.updateDoc(playerDoc(), {
-            tickets: tickets || [],
-            betDone: true,
-        }),
+        onComplete: (tickets) => {
+            // 締め切り後や次ラウンド開始後の書き込みは捨てる（前ラウンドの買い目が混ざらないように）
+            if (!o.room || o.room.phase !== "betting" || o.room.round !== room.round) return;
+            fb.updateDoc(playerDoc(), { tickets: tickets || [], betDone: true }).catch(() => {});
+        },
     });
     startBetCountdown();
 }
@@ -759,25 +784,29 @@ function scheduleBetAdvance(room) {
 
 // ---- Race ----
 function hostStartRace(room) {
-    if (o.raceStartedRound === room.round) return;
-    o.raceStartedRound = room.round;
+    if (!claimOnce("race", room.round)) return;
     fb.updateDoc(roomDoc(), {
         raceSeed: randomSeed(),
         phase: "race",
-        summary: { players: playerSummary(room.players), updatedAt: Date.now() },
-    });
+    }).catch(() => releaseClaim("race", room.round));
 }
 
 async function handleRace(room) {
     if (!room.raceSeed || !o.engine) return;
     if (o.playedRound === room.round) return;
     o.playedRound = room.round; // 再生開始ガード（多重起動防止）
+    o.playingRound = room.round;
 
     const ps0 = room.players || {};
-    await playRace(o.engine.horses, room.raceSeed, {
+    const ordered = await playRace(o.engine.horses, room.raceSeed, {
         engine: o.engine,
-        players: Object.keys(ps0).map((id) => ({ name: ps0[id].name, tickets: ps0[id].tickets || [] })),
+        players: Object.keys(ps0)
+            .filter((id) => (ps0[id].tickets || []).length)
+            .map((id) => ({ name: ps0[id].name, tickets: ps0[id].tickets || [] })),
     });
+    if (o.playingRound === room.round) o.playingRound = null;
+    if (!ordered) return;                                   // 途中で中断された
+    if (!o.room || o.room.round !== room.round) return;     // 待っているうちに次ラウンドへ進んだ
     o.finishedRound = room.round; // 再生完了（ここまで来て初めて精算/結果表示OK）
     trySettle();
     maybeShowResult(o.room);
@@ -790,8 +819,7 @@ function trySettle() {
     if (!room || room.phase !== "race") return;
     if (!o.isHost || !o.engine) return;
     if (o.finishedRound !== room.round) return;
-    if (o.settledRound === room.round) return;
-    o.settledRound = room.round;
+    if (!claimOnce("settle", room.round)) return;
 
     const orderIds = orderFromSeed(room).map((h) => h.id);
     const ps = room.players || {};
@@ -837,35 +865,27 @@ function trySettle() {
         phase: "result",
         resultDeadlineAt: Date.now() + RESULT_WAIT_MS,
         gameOver: false,
-        summary: { players: playerSummary(settledPlayers), updatedAt: Date.now() },
     });
-    batch.commit();
+    batch.commit().catch(() => releaseClaim("settle", room.round));
 }
 function hostReset() {
+    const room = o.room;
+    if (!room || !claimOnce("reset", room.round)) return;
     const batch = fb.writeBatch(fb.db);
-    const resetPlayers = {};
-    Object.keys(o.room.players || {}).forEach((id) => {
-        resetPlayers[id] = {
-            ...o.room.players[id],
-            balance: o.room.funds,
-            betDone: false,
-            tickets: [],
-        };
-    });
     batch.update(roomDoc(), {
         phase: "lobby",
         gameOver: false,
         raceSeed: 0,
-        summary: { players: playerSummary(resetPlayers), updatedAt: Date.now() },
     });
-    Object.keys(o.room.players || {}).forEach((id) => {
+    Object.keys(room.players || {}).forEach((id) => {
         batch.update(playerDoc(id), {
-            balance: o.room.funds,
+            balance: room.funds,
             betDone: false,
             tickets: [],
+            bankrupt: false,
         });
     });
-    batch.commit();
+    batch.commit().catch(() => releaseClaim("reset", room.round));
 }
 
 // ---- 結果 ----
@@ -879,6 +899,16 @@ function maybeShowResult(room) {
     if (!room || room.phase !== "result") return;
     if (o.finishedRound !== room.round) return;
     if (!o.engine) return;
+
+    // 精算の書き込みは部屋ドキュメントとプレイヤードキュメントで別々に届くので、
+    // 残高が変わったときは描き直す。それ以外のスナップショットでは描き直さない
+    // （人数分のカウントアップ演出が毎回やり直しになって重く・チラつく）。
+    const ps0 = room.players || {};
+    const sig = `${room.round}|` + Object.keys(ps0).sort()
+        .map((id) => `${id}:${ps0[id].balance}:${ps0[id].bankrupt ? 1 : 0}:${ps0[id].reviveResult || ""}`)
+        .join(",");
+    if (o.resultShownSig === sig) return;
+    o.resultShownSig = sig;
 
     const ordered = orderFromSeed(room);
     const orderIds = ordered.map((h) => h.id);
@@ -960,9 +990,15 @@ function scheduleResultAdvance(room) {
         }, Math.max(0, deadline - Date.now() + 250));
     }
 }
+// 着順の再計算はレース1本ぶんのシミュレーションなので、同じシードなら使い回す。
+// （結果画面のたびに回すと大人数のとき目に見えて固まる）
+let orderCache = { seed: null, horseSeed: null, order: null };
 function orderFromSeed(room) {
+    if (orderCache.seed === room.raceSeed && orderCache.horseSeed === o.engineSeed) return orderCache.order;
     const data = simulateRaceData(o.engine.horses, makeRng(room.raceSeed));
-    return data.order.map((i) => o.engine.horses[i]);
+    const order = data.order.map((i) => o.engine.horses[i]);
+    orderCache = { seed: room.raceSeed, horseSeed: o.engineSeed, order };
+    return order;
 }
 
 // 共有画面（ベット/レース）の退出ボタン用

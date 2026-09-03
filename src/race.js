@@ -36,6 +36,7 @@ export class Race {
         this.onFinish = null;
         this.onTick = null;
         this._raf = null;
+        this._stopped = false;
         this._startWall = 0;
         this._dist = horses.map(() => 0); // 各馬の走行距離(0..TRACK_LEN)
         // 1着馬がゴールするまでのシミュ時間。これを RACE_DURATION 秒で再生する
@@ -67,17 +68,23 @@ export class Race {
     }
 
     start() {
+        if (this._stopped) return;
         this._startWall = performance.now();
         this.renderer3d?.beginPerformanceMonitoring();
         this._raf = requestAnimationFrame((t) => this._loop(t));
     }
 
     stop() {
-        if (this._raf) cancelAnimationFrame(this._raf);
+        if (this._stopped) return;
+        this._stopped = true;
+        if (this._raf) { cancelAnimationFrame(this._raf); this._raf = null; }
+        this.onTick = null;
+        this.onFinish = null;
         if (this.renderer3d) this.renderer3d.dispose();
     }
 
     _loop(now) {
+        if (this._stopped) return;
         // rAFのタイムスタンプは start() 時点の performance.now() より僅かに過去のことがある
         const elapsed = Math.max(0, (now - this._startWall) / 1000);
         const { frames, dt } = this.data;

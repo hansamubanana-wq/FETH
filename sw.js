@@ -1,5 +1,5 @@
-const APP_VERSION = "0.18.0";
-const APP_BUILD = 24;
+const APP_VERSION = "0.19.0";
+const APP_BUILD = 25;
 const CACHE_NAME = `feth-build-${APP_BUILD}`;
 const VERSION_PATH = "/src/version.js";
 

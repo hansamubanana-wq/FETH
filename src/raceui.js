@@ -4,17 +4,35 @@ import { makeRng } from "./rng.js";
 import { settleTickets } from "./engine.js";
 import { showScreen } from "./ui.js";
 
-const LIVE_INTERVAL = 130; // ライブ表示の更新間隔(ms)
+const LIVE_INTERVAL = 130;       // ライブ表示の更新間隔(ms)
+const LIVE_INTERVAL_CROWD = 280; // 大人数のときはさらに間引く
 
 let liveCtx = null;     // { engine, players:[{name,tickets}], bettorMap }
 let lastLive = 0;
 let abilityLive = null;
+let session = null;     // 再生中のレース（多重再生と後片付けの管理用）
+
+// 再生中のレースを中断して3D資源を解放する。
+// ラウンドが進んでしまったときなど、外から強制的に止めたいときに使う。
+// 中断された playRace() の Promise は null で解決する。
+export function stopRacePlayback() {
+    const s = session;
+    if (!s) return;
+    session = null;
+    s.cancelled = true;
+    s.timers.forEach((id) => { clearTimeout(id); clearInterval(id); });
+    s.timers.clear();
+    s.race.stop();
+    document.getElementById("race-loading")?.classList.add("hidden");
+    s.resolve?.(null);
+}
 
 // raceSeed と horses からレースを再生する。
 //  context（任意）= { engine, players:[{name,tickets}] } を渡すと
 //  「誰が何に賭けたか」「現在順位での損益」をライブ表示する。
 // 返り値: Promise<orderedHorses>（演出終了後に解決）。
 export function playRace(horses, raceSeed, context = null) {
+    stopRacePlayback();   // 前のレースが残っていたら必ず片付けてから始める
     const raceData = simulateRaceData(horses, makeRng(raceSeed));
     showScreen("screen-race");
 
@@ -40,18 +58,26 @@ export function playRace(horses, raceSeed, context = null) {
     });
     race._draw(0);
 
+    const s = { race, cancelled: false, timers: new Set(), resolve: null };
+    session = s;
+    const after = (fn, ms) => { const id = setTimeout(fn, ms); s.timers.add(id); return id; };
+    const every = (fn, ms) => { const id = setInterval(fn, ms); s.timers.add(id); return id; };
+
     return new Promise((resolve) => {
+        s.resolve = resolve;
         race.whenReady().finally(() => {
+            if (s.cancelled) return;
             loading?.classList.add("hidden");
             let c = 3;
             status.textContent = c;
-            const timer = setInterval(() => {
+            const timer = every(() => {
             c--;
             if (c > 0) { status.textContent = c; return; }
             clearInterval(timer);
+            s.timers.delete(timer);
             status.textContent = "スタート！";
             screen.classList.add("race-start-flash");
-            setTimeout(() => {
+            after(() => {
                 screen.classList.remove("race-start-flash");
                 if (status.textContent === "スタート！") status.textContent = "🏇 レース中！";
             }, 900);
@@ -71,10 +97,17 @@ export function playRace(horses, raceSeed, context = null) {
                 race.onTick = null;
                 updateLive(ordered, true);
                 finishAbilityLive();
-                    status.textContent = `FINISH — 1着 ${ordered[0].name}`;
-                    screen.classList.add("race-finish-flash");
-                    setTimeout(() => screen.classList.remove("race-finish-flash"), 1000);
-                    setTimeout(() => resolve(ordered), 1300);
+                status.textContent = `FINISH — 1着 ${ordered[0].name}`;
+                screen.classList.add("race-finish-flash");
+                after(() => screen.classList.remove("race-finish-flash"), 1000);
+                after(() => {
+                    if (s.cancelled) return;
+                    if (session === s) session = null;
+                    // ここで stop() しないと3Dのシーン一式が解放されず、
+                    // レースを重ねるほど重くなって最後は固まる。
+                    race.stop();
+                    resolve(ordered);
+                }, 1300);
             };
             race.start();
             }, 700);
@@ -117,7 +150,61 @@ function setupLive(context) {
         (p.tickets || []).forEach((t) => (t.sel || []).forEach((id) => ids.add(id)));
         ids.forEach((id) => { if (bettorMap[id]) bettorMap[id].push(p.name); });
     });
-    liveCtx = { engine: context.engine, players: context.players, bettorMap };
+    liveCtx = {
+        engine: context.engine,
+        players: context.players,
+        bettorMap,
+        // 大人数だと毎フレームの再描画・精算計算が3Dのフレームレートを削るので間引く
+        interval: context.players.length > 8 ? LIVE_INTERVAL_CROWD : LIVE_INTERVAL,
+        lastOrderKey: "",
+        rows: null,
+        plRows: null,
+    };
+}
+
+// 順位表・損益表の行を一度だけ作る。以降は中身の差し替えだけにして
+// innerHTML の作り直し（＝レース中の毎回のパースとレイアウト）をなくす。
+function buildLiveRows() {
+    const st = document.getElementById("live-standings");
+    const pl = document.getElementById("live-pl");
+    if (!st || !pl || !liveCtx) return;
+
+    st.innerHTML = "";
+    liveCtx.rows = new Map();
+    liveCtx.engine.horses.forEach((h) => {
+        const li = document.createElement("li");
+        const rank = document.createElement("span");
+        rank.className = "lr";
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        dot.style.background = h.color;
+        const name = document.createElement("span");
+        name.className = "lh";
+        name.textContent = `${h.id + 1}. ${h.name}`;
+        li.append(rank, dot, name);
+        const who = liveCtx.bettorMap[h.id] || [];
+        if (who.length) {
+            const tag = document.createElement("span");
+            tag.className = "who-tag";
+            tag.textContent = `賭: ${who.join(", ")}`;
+            li.appendChild(tag);
+        }
+        liveCtx.rows.set(h.id, { li, rank });
+        st.appendChild(li);
+    });
+
+    pl.innerHTML = "";
+    liveCtx.plRows = liveCtx.players.map((p) => {
+        const li = document.createElement("li");
+        const name = document.createElement("span");
+        name.textContent = p.name;
+        const delta = document.createElement("span");
+        delta.className = "delta";
+        delta.textContent = "±0";
+        li.append(name, delta);
+        pl.appendChild(li);
+        return delta;
+    });
 }
 
 function setupAbilityLive(horses, raceData) {
@@ -190,38 +277,37 @@ function abilityRow(ev, state) {
 function updateLive(ordered, force = false) {
     if (!liveCtx) return;
     const now = performance.now();
-    if (!force && now - lastLive < LIVE_INTERVAL) return;
+    if (!force && now - lastLive < liveCtx.interval) return;
     lastLive = now;
 
     const orderIds = ordered.map((h) => h.id);
-    const medals = ["🥇", "🥈", "🥉"];
+    // 順位が変わっていなければ表示も損益も変わらない。人数分の精算計算ごと省く。
+    const orderKey = orderIds.join(",");
+    if (!force && orderKey === liveCtx.lastOrderKey) return;
+    liveCtx.lastOrderKey = orderKey;
 
-    // 順位 + 賭けた人
+    if (!liveCtx.rows) buildLiveRows();
+    if (!liveCtx.rows) return;
+
+    const medals = ["🥇", "🥈", "🥉"];
     const st = document.getElementById("live-standings");
-    st.innerHTML = "";
     ordered.forEach((h, i) => {
-        const li = document.createElement("li");
-        const who = liveCtx.bettorMap[h.id] || [];
-        const tag = who.length ? `<span class="who-tag">賭: ${who.join(", ")}</span>` : "";
-        li.innerHTML = `
-            <span class="lr">${medals[i] || i + 1}</span>
-            <span class="dot" style="background:${h.color}"></span>
-            <span class="lh">${h.id + 1}. ${h.name}</span>
-            ${tag}`;
-        st.appendChild(li);
+        const row = liveCtx.rows.get(h.id);
+        if (!row) return;
+        const label = medals[i] || String(i + 1);
+        if (row.rank.textContent !== label) row.rank.textContent = label;
+        st.appendChild(row.li);   // 既存ノードの並べ替え（作り直さない）
     });
 
     // 今ゴールなら…の損益
-    const pl = document.getElementById("live-pl");
-    pl.innerHTML = "";
-    liveCtx.players.forEach((p) => {
-        const res = settleTickets(p.tickets || [], orderIds, liveCtx.engine.horses, liveCtx.engine.byKey);
-        const d = res.delta;
+    liveCtx.players.forEach((p, i) => {
+        const el = liveCtx.plRows[i];
+        if (!el) return;
+        const d = settleTickets(p.tickets || [], orderIds, liveCtx.engine.horses, liveCtx.engine.byKey).delta;
         const str = d > 0 ? `+${d}` : d < 0 ? `${d}` : "±0";
+        if (el.textContent !== str) el.textContent = str;
         const cls = d > 0 ? "win" : d < 0 ? "lose" : "";
-        const li = document.createElement("li");
-        li.innerHTML = `<span>${p.name}</span><span class="delta ${cls}">${str}</span>`;
-        pl.appendChild(li);
+        if (el.className !== `delta ${cls}`) el.className = `delta ${cls}`;
     });
 }
 

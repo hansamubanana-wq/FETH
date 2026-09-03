@@ -1,5 +1,9 @@
 // 画面切り替えの共通ヘルパー。
+let activeScreen = null;
 export function showScreen(id) {
+    // オンラインは毎スナップショットで同じ画面を指定してくるので、変化がないときは何もしない
+    if (activeScreen === id && document.getElementById(id)?.classList.contains("active")) return;
+    activeScreen = id;
     document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
     document.getElementById(id).classList.add("active");
     const paddockScreens = new Set(["screen-pick"]);
