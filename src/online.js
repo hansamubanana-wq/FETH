@@ -110,6 +110,19 @@ function scheduleHostRetry() {
     }, 1500);
 }
 
+// 進行の判断を追うためのログ。ブラウザで
+//   localStorage.setItem("keiba_debug", "1")
+// を実行してリロードすると出力される。切るときは removeItem。
+const DEBUG = (() => { try { return localStorage.getItem("keiba_debug") === "1"; } catch { return false; } })();
+function debugLog(event, detail) {
+    if (!DEBUG) return;
+    console.log(`[keiba ${new Date().toISOString().slice(14, 23)}] ${event}`, detail);
+}
+function debugPlayers(room) {
+    const ps = room.players || {};
+    return Object.keys(ps).map((id) => `${ps[id].name}:r${ps[id].round}${ps[id].betDone ? "/OK" : "/-"}`).join(" ");
+}
+
 function roomDoc() { return fb.doc(fb.db, "rooms", o.code); }
 function playersCollection() { return fb.collection(fb.db, "rooms", o.code, "players"); }
 function playerDoc(id = uid) { return fb.doc(fb.db, "rooms", o.code, "players", id); }
@@ -578,7 +591,16 @@ function onRoom(room) {
             fb.updateDoc(roomDoc(), { host: uid }).catch(() => releaseClaim("takeover", room.host));
         }
     }
+    if (o._lastLogged !== `${room.phase}:${room.round}`) {
+        o._lastLogged = `${room.phase}:${room.round}`;
+        debugLog("phase", { phase: room.phase, round: room.round, raceSeed: room.raceSeed, players: debugPlayers(room) });
+    }
+
+    const becameHost = !o.isHost && room.host === uid;
     o.isHost = (room.host === uid);
+    // ホストを引き継いだ直後は、players を受け取り直すまで「全員OK」を信用しない。
+    // （引き継いだ端末は前ホストのベット開始を見ていないので基準を持っていない）
+    if (becameHost) o.bettingStartedVersion = o.playersVersion;
 
     if (room.horseSeed && o.engineSeed !== room.horseSeed) {
         o.engine = buildRace(room.horseSeed, room.names || null);
@@ -605,10 +627,12 @@ function onRoom(room) {
 }
 
 // プレイヤードキュメントが現在のラウンドのものか。
-// round を持たない古いドキュメント（旧バージョンで作られた部屋）は現行扱いにして、
-// 更新途中の部屋が2分の締め切りまで進まなくなるのを避ける。
+// ここを「round が無ければ現行扱い」にすると、前ラウンドの betDone=true が
+// すり抜けて「全員OK」になり、賭けられないレースが始まる。必ず厳密に比べる。
+// round を持たない古いドキュメント（旧バージョンで作られた部屋）は
+// scheduleBetSelfHeal() が現在のラウンドへ揃えるので、ここで甘くする必要はない。
 function isCurrentRound(player, round) {
-    return player.round === undefined || player.round === round;
+    return player.round === round;
 }
 
 function allBet(room) {
@@ -701,6 +725,7 @@ function hostStartBetting() {
         });
     });
     o.bettingStartedVersion = o.playersVersion;
+    debugLog("start-betting", { round, playersVersion: o.playersVersion });
     batch.commit().catch(() => releaseClaim("betting", round));
 }
 
@@ -823,7 +848,16 @@ function scheduleBetAdvance(room) {
     // 部屋ドキュメントの方が先に届くため、ここを見ないと前ラウンドの betDone=true で
     // 賭けられないレースが始まってしまう。
     const playersFresh = o.playersVersion > o.bettingStartedVersion;
-    if ((playersFresh && allBet(room)) || (deadline && Date.now() >= deadline)) {
+    const byAllBet = playersFresh && allBet(room);
+    const byDeadline = !!deadline && Date.now() >= deadline;
+    if (byAllBet || byDeadline) {
+        // 賭けられないレースが始まったときは、ここに理由が出る。
+        debugLog("race-start", {
+            round: room.round, byAllBet, byDeadline, playersFresh,
+            playersVersion: o.playersVersion, bettingStartedVersion: o.bettingStartedVersion,
+            msPastDeadline: deadline ? Date.now() - deadline : null,
+            players: debugPlayers(room),
+        });
         hostStartRace(room);
         return;
     }
