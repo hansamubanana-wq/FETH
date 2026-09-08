@@ -29,7 +29,7 @@ async function ensureDb() {
         getDoc: fsMod.getDoc, onSnapshot: fsMod.onSnapshot, collection: fsMod.collection,
         deleteField: fsMod.deleteField, deleteDoc: fsMod.deleteDoc,
         arrayUnion: fsMod.arrayUnion, arrayRemove: fsMod.arrayRemove,
-        writeBatch: fsMod.writeBatch,
+        writeBatch: fsMod.writeBatch, getDocs: fsMod.getDocs,
     };
     return fb;
 }
@@ -386,7 +386,8 @@ async function createRoom() {
     try {
         const batch = fb.writeBatch(fb.db);
         batch.set(roomDoc(), {
-            host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0, createdAt: Date.now(),
+            host: uid, phase: "lobby", funds, round: 0, horseSeed: 0, raceSeed: 0,
+            createdAt: Date.now(), hostBuild: APP_BUILD,
         });
         batch.set(playerDoc(), { name, balance: funds, betDone: false, tickets: [], bankrupt: false, readyNext: false, round: 0 });
         await batch.commit();
@@ -652,6 +653,7 @@ function renderLobby(room) {
     renderFriends();
     const startBtn = document.getElementById("lobby-start");
     const note = document.getElementById("lobby-note");
+    const warn = hostBuildWarning(room);
     if (o.isHost) {
         startBtn.classList.remove("hidden");
         note.textContent = "全員そろったら「ゲーム開始」を押してください";
@@ -659,6 +661,7 @@ function renderLobby(room) {
         startBtn.classList.add("hidden");
         note.textContent = "ホストの開始を待っています…";
     }
+    if (warn) note.textContent += `\n${warn}`;
 }
 
 function renderPlayerList(elId, room, statusFn) {
@@ -714,6 +717,7 @@ function hostStartBetting() {
         names: pickNames(NUM_HORSES),
         resultDeadlineAt: fb.deleteField(),
         betDeadlineAt: Date.now() + BET_WAIT_MS,
+        hostBuild: APP_BUILD,
     });
     Object.keys(room.players || {}).forEach((id) => {
         batch.update(playerDoc(id), {
@@ -729,9 +733,22 @@ function hostStartBetting() {
     batch.commit().catch(() => releaseClaim("betting", round));
 }
 
+// 古いビルドの端末がホストだと、その端末が進行を決めるので部屋全体が
+// 古い挙動のままになる（賭けられないレースが始まるなど）。
+// コンソールを開けない端末でも気づけるように画面に出す。
+function hostBuildWarning(room) {
+    if (!room) return "";
+    const build = room.hostBuild;
+    if (build === undefined || build < APP_BUILD) {
+        return `⚠ ホストの端末が古いバージョンです（このまま遊ぶと不具合が出ます）。ホストの人はアプリを再読み込みしてください。`;
+    }
+    return "";
+}
+
 function showWait(room, title) {
     showScreen("screen-wait");
-    o._waitTitle = title;
+    const warn = hostBuildWarning(room);
+    o._waitTitle = warn ? `${title}\n${warn}` : title;
     renderPlayerList("wait-players", room, (p) => {
         const base = p.betDone ? "OK" : "選択中";
         return p.bankrupt ? `破産 / ${base}` : base;
@@ -870,12 +887,32 @@ function scheduleBetAdvance(room) {
 }
 
 // ---- Race ----
-function hostStartRace(room) {
+// レース開始はやり直しがきかないので、ローカルのスナップショットだけで決めない。
+// 部屋ドキュメントと players は別々のリスナーで届き到着順が保証されないため、
+// 手元の players が前ラウンドのままなのに「全員OK」に見えることがある。
+// （これが「賭けられないレースが始まる」の正体）
+// ここでサーバーから players を読み直し、本当に全員が今のラウンドで
+// 賭け終わっているかを確定させてから開始する。
+async function hostStartRace(room) {
     if (!claimOnce("race", room.round)) return;
-    fb.updateDoc(roomDoc(), {
-        raceSeed: randomSeed(),
-        phase: "race",
-    }).catch(() => releaseClaim("race", room.round));
+    try {
+        const snap = await fb.getDocs(playersCollection());
+        const fresh = {};
+        snap.forEach((playerSnap) => { fresh[playerSnap.id] = playerSnap.data(); });
+        const deadlinePassed = !!room.betDeadlineAt && Date.now() >= room.betDeadlineAt;
+        if (!deadlinePassed && !allBet({ ...room, players: fresh })) {
+            debugLog("race-start-aborted", { round: room.round, players: debugPlayers({ players: fresh }) });
+            releaseClaim("race", room.round);   // まだ全員そろっていない。次の更新でやり直す
+            return;
+        }
+        await fb.updateDoc(roomDoc(), {
+            raceSeed: randomSeed(),
+            phase: "race",
+            hostBuild: APP_BUILD,
+        });
+    } catch (e) {
+        releaseClaim("race", room.round);
+    }
 }
 
 async function handleRace(room) {

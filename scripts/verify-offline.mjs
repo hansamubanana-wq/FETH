@@ -1,3 +1,12 @@
+// オフライン(PWA)動作の検証。
+//
+// version.js の扱いについて:
+//   以前はここだけ Service Worker のキャッシュ対象外にして常に最新を返していた。
+//   しかしそれだと、実際に動いているコードが古いキャッシュのままでも APP_BUILD
+//   だけが最新になり、アプリが「自分は最新」と誤判定して更新バナーが出なくなる。
+//   （更新したのに古い挙動が続く、の原因）
+//   いまは version.js もビルドと一緒にキャッシュし、APP_BUILD が
+//   「実際に動いているコードのビルド」を指すようにしている。
 import { chromium } from "playwright";
 
 const APP_URL = "http://localhost:8000/";
@@ -37,6 +46,7 @@ const cacheAudit = await page.evaluate(async () => {
     )).flat().map((request) => request.url);
     return {
         cacheNames,
+        // version.js はビルドと一緒にキャッシュされていること（上のコメント参照）
         versionCached: cachedUrls.some((url) => new URL(url).pathname.endsWith("/src/version.js")),
     };
 });
@@ -67,7 +77,7 @@ await browser.close();
 process.exit(
     !outcome.offlineRaceCompleted
     || outcome.forbiddenRequestCount !== 0
-    || outcome.versionCached
+    || !outcome.versionCached
     || errors.length
         ? 1
         : 0,

@@ -14,6 +14,12 @@ window.__fakeDb = {
     writes: [],
     // テストから「別端末の書き込み」を再現するための入口（通知も本番と同じ経路で流れる）
     write: (path, data) => writeDoc(path, data, { merge: true }),
+    // バッチ適用後に「古い players」が一度だけ配信される状況を再現する。
+    // 実際の Firestore でも、部屋ドキュメントが先に届いたあとに
+    // バッチ以前の内容を含むコレクション更新が挟まることがある。
+    // このとき手元のデータだけで「全員OK」を判定すると、
+    // 前ラウンドの betDone=true を掴んで賭けられないレースが始まる。
+    staleEcho: false,
 };
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -22,6 +28,16 @@ const pathOf = (ref) => ref.__path;
 function docSnap(path) {
     const data = store.get(path);
     return { id: path.split("/").pop(), exists: () => data !== undefined, data: () => clone(data) };
+}
+function colSnapFrom(src, colPath) {
+    const prefix = colPath + "/";
+    const rows = [];
+    for (const [path, data] of src) {
+        if (!path.startsWith(prefix)) continue;
+        if (path.slice(prefix.length).includes("/")) continue;
+        rows.push({ id: path.slice(prefix.length), data: () => clone(data) });
+    }
+    return { forEach: (fn) => rows.forEach(fn), docs: rows, size: rows.length };
 }
 function colSnap(colPath) {
     const prefix = colPath + "/";
@@ -89,6 +105,8 @@ export async function deleteDoc(ref) {
     markDirty(pathOf(ref));
 }
 export async function getDoc(ref) { return docSnap(pathOf(ref)); }
+// サーバー読み直し相当。リスナーの遅延に関係なく、常に現在のストアを返す。
+export async function getDocs(ref) { return colSnap(pathOf(ref)); }
 export function onSnapshot(ref, cb) {
     const entry = { path: pathOf(ref), cb };
     if (ref.__collection) {
@@ -113,10 +131,17 @@ export function writeBatch() {
                     throw Object.assign(new Error("No document to update: " + path), { code: "not-found" });
                 }
             }
+            const before = new Map(store);
             for (const [op, path, data, opts] of ops) {
                 if (op === "set") writeDoc(path, data, { merge: !!(opts && opts.merge) });
                 else if (op === "update") writeDoc(path, data, { merge: true });
                 else { store.delete(path); markDirty(path); }
+            }
+            if (window.__fakeDb.staleEcho) {
+                // 部屋ドキュメントが先に届いた直後に、バッチ以前の players を1回流す
+                setTimeout(() => {
+                    for (const l of colListeners.slice()) l.cb(colSnapFrom(before, l.path));
+                }, 1);
             }
         },
     };

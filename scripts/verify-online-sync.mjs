@@ -16,6 +16,8 @@ import { FAKE_FIRESTORE_SOURCE } from "./fake-firestore.mjs";
 const URL = "http://localhost:8000/";
 const ROUNDS = Number(process.argv[2] || 2);
 const COLLECTION_DELAY_MS = Number(process.argv[3] || 60);
+// 第4引数に stale を渡すと、バッチ適用後に古い players が一度配信される状況も再現する
+const STALE_ECHO = process.argv[4] === "stale";
 const OTHERS = ["sim-a", "sim-b"];
 const TIMEOUT = 150000;
 
@@ -51,10 +53,14 @@ await page.addInitScript(() => {
     });
 });
 
-await page.addInitScript((ms) => {
-    addEventListener("DOMContentLoaded", () => { if (window.__fakeDb) window.__fakeDb.collectionDelayMs = ms; });
-    const apply = setInterval(() => { if (window.__fakeDb) { window.__fakeDb.collectionDelayMs = ms; clearInterval(apply); } }, 20);
-}, COLLECTION_DELAY_MS);
+await page.addInitScript(([ms, stale]) => {
+    const apply = setInterval(() => {
+        if (!window.__fakeDb) return;
+        window.__fakeDb.collectionDelayMs = ms;
+        window.__fakeDb.staleEcho = stale;
+        clearInterval(apply);
+    }, 20);
+}, [COLLECTION_DELAY_MS, STALE_ECHO]);
 
 await page.goto(URL, { waitUntil: "load" });
 await page.evaluate(() => {
@@ -131,6 +137,7 @@ const ok = !phantomRace && countsOk && errors.length === 0;
 console.log(JSON.stringify({
     rounds: ROUNDS,
     collectionDelayMs: COLLECTION_DELAY_MS,
+    staleEcho: STALE_ECHO,
     observed,
     screenEnters: enters,
     phantomRace,

@@ -1,7 +1,6 @@
-const APP_VERSION = "0.19.1";
-const APP_BUILD = 26;
+const APP_VERSION = "0.19.2";
+const APP_BUILD = 27;
 const CACHE_NAME = `feth-build-${APP_BUILD}`;
-const VERSION_PATH = "/src/version.js";
 
 const PRECACHE_URLS = [
     "./",
@@ -61,6 +60,10 @@ const PRECACHE_URLS = [
     "./src/raceui.js",
     "./src/rng.js",
     "./src/ui.js",
+    // version.js もビルドと一緒にキャッシュする。ここだけネットワークから
+    // 最新を返していると、実際に動いているコードが古いままでも APP_BUILD が
+    // 最新になり、「自分は最新」と誤判定して更新バナーが出なくなる。
+    "./src/version.js",
 ];
 
 self.addEventListener("install", (event) => {
@@ -88,16 +91,6 @@ self.addEventListener("fetch", (event) => {
 
     const url = new URL(request.url);
     if (url.origin !== self.location.origin) return;
-
-    if (url.pathname.endsWith(VERSION_PATH)) {
-        event.respondWith(
-            fetch(request, { cache: "no-store" }).catch(() => new Response(
-                `export const APP_VERSION = ${JSON.stringify(APP_VERSION)};\nexport const APP_BUILD = ${APP_BUILD};\n`,
-                { headers: { "Content-Type": "text/javascript; charset=utf-8" } },
-            )),
-        );
-        return;
-    }
 
     event.respondWith(
         caches.match(request).then((cached) => cached || fetch(request)),

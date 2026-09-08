@@ -2119,3 +2119,7 @@ code {
 .hidden {
     display: none !important;
 }
+
+/* ホストのバージョン警告を2行目に折り返して表示する */
+#lobby-note,
+#wait-title { white-space: pre-line; }
