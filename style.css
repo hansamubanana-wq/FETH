@@ -2123,3 +2123,184 @@ code {
 /* ホストのバージョン警告を2行目に折り返して表示する */
 #lobby-note,
 #wait-title { white-space: pre-line; }
+
+/* ============================================================
+   タブレット（iPadなど）で画面をビューポート内に収める
+   ------------------------------------------------------------
+   縦に積むレイアウトのままだと iPad ではどの画面もスクロールが必要だった
+   （結果画面は最大 1092px はみ出していた）。
+   ページ自体はスクロールさせず、量が読めない一覧だけを内側でスクロールさせる。
+   ============================================================ */
+@media (min-width: 700px) and (min-height: 560px) {
+    html, body { height: 100%; overflow: hidden; }
+
+    #app {
+        height: 100vh;
+        height: 100dvh;
+        max-width: 1280px;
+        padding: max(10px, env(safe-area-inset-top)) 16px max(10px, env(safe-area-inset-bottom));
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .screen.active {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    /* 見出し・注釈まわりを詰める */
+    .screen.active > h2 { margin: 0 0 6px; font-size: clamp(1.15rem, 2.2vh, 1.6rem); }
+    .screen.active > h3.section-title,
+    .result-col > h3.section-title { margin: 8px 0 6px; }
+
+    /* ---- ホーム：横向きだとヒーローが縦にはみ出す ---- */
+    #screen-home {
+        min-height: 0;
+        padding: clamp(10px, 2.2vh, 34px) 16px clamp(10px, 2vh, 28px);
+        justify-content: center;
+    }
+
+    /* ---- ロビー・待機・オンライン各画面：一覧だけ内側でスクロール ---- */
+    .online-screen { justify-content: center; }
+    .online-panel { max-height: 100%; overflow: auto; }
+    #lobby-players,
+    #wait-players { max-height: min(46vh, 420px); overflow: auto; }
+
+    /* ---- ベット画面 ---- */
+    #screen-pick .balance-bar { margin: 0 0 8px; }
+    .bet-layout {
+        flex: 1 1 auto;
+        min-height: 0;
+        margin-top: 10px;
+        gap: 16px;
+    }
+    .bet-horse-column {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+    #horse-choices { min-height: 0; overflow: auto; }
+    .bet-sidebar {
+        position: static;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        gap: 10px;
+    }
+    .bet-action-panel { flex: 0 0 auto; }
+    .purchased-bets {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        margin-top: 0;
+    }
+    .betslip { flex: 1 1 auto; min-height: 0; overflow: auto; }
+    .purchased-bets #skip-bet { flex: 0 0 auto; }
+
+    /* ---- レース画面：コースの高さを残り領域から決める ---- */
+    #screen-race { justify-content: flex-start; }
+    .race-stage {
+        flex: 0 0 auto;
+        width: min(100%, calc((100dvh - 230px) * 16 / 9));
+        max-height: calc(100dvh - 230px);
+        margin-inline: auto;
+    }
+    .live-panels {
+        flex: 1 1 auto;
+        min-height: 0;
+        margin-top: 10px;
+        flex-wrap: nowrap;
+    }
+    .live-box {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 8px 12px;
+    }
+    .live-box h4 { margin: 0 0 4px; font-size: 0.82rem; }
+    .live-box > ol,
+    .live-box > ul { flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0; }
+
+    /* ---- 結果画面：縦一列をやめて2カラムにする ---- */
+    .result-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 18px;
+        align-items: center;   /* 収まりきったとき下に余白が固まらないように */
+    }
+    .result-col {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        max-height: 100%;
+    }
+    .result-col-side { overflow: auto; }
+    .victory-keyart {
+        flex: 0 0 auto;
+        min-height: 0;
+        height: clamp(110px, 20vh, 210px);
+        margin: 0 auto 10px;
+    }
+    .result-list { margin-bottom: 0; flex: 1 1 auto; min-height: 0; overflow: auto; }
+    /* 表彰台の段差は残したまま、高さに合わせて縮める（0にすると肖像が潰れる） */
+    .result-list li:nth-child(-n + 3) { min-height: clamp(104px, 15vh, 164px); padding: 10px 6px; }
+    .result-list li:nth-child(1) { min-height: clamp(126px, 18vh, 196px); }
+    .result-list li:nth-child(2) { min-height: clamp(114px, 16.4vh, 174px); }
+    .result-list li:nth-child(3) { min-height: clamp(104px, 15vh, 164px); }
+    .result-list li:nth-child(-n + 3) small { display: none; }
+    .winner-rays { width: 110px; height: 110px; }
+    /* 4着以降を詰めて、8頭ぶんを内側スクロールなしで収める */
+    .result-list { gap: 6px; }
+    .result-list li:nth-child(n + 4) { padding: 5px 12px; font-size: 0.95rem; }
+    .result-list li:nth-child(n + 4) .result-horse-portrait {
+        width: 36px; height: 36px; flex: 0 0 36px;
+    }
+    .result-list li:nth-child(n + 4) .rank { font-size: 1.15rem; }
+    /* ボタンは横並びにして高さを半分にする */
+    .result-buttons {
+        max-width: 820px;
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+    }
+    .result-buttons button {
+        flex: 1 1 0;
+        margin: 0;
+        white-space: nowrap;
+        font-size: clamp(0.9rem, 1.7vh, 1.05rem);
+    }
+
+    /* ---- レース中のライブ表示：8頭ぶんを内側スクロールなしで並べる ---- */
+    .live-standings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; }
+    .live-standings li { padding: 1px 0; font-size: 0.82rem; }
+    .live-standings .who-tag { display: none; }
+    .live-pl li { padding: 1px 0; font-size: 0.86rem; }
+
+    /* ---- ベット画面：8頭を内側スクロールなしで収める ---- */
+    #screen-pick .name-field { margin: 6px auto 0; max-width: 420px; }
+    #pick-instruction { margin: 6px 0; }
+    .horse-grid { gap: 10px; margin-top: 10px; }
+    .horse-pick { padding: 8px 6px; }
+    .horse-portrait-wrap { width: clamp(52px, 6.4vh, 84px); }
+    .horse-pick .hname { font-size: 0.9rem; margin: 4px 0 2px; }
+    .horse-pick .odds { font-size: 0.8rem; }
+    .horse-pick .meters { gap: 2px; font-size: 0.66rem; }
+    .horse-pick .meter .ml { white-space: nowrap; }
+    .horse-pick .tags { font-size: 0.68rem; gap: 3px; }
+    #result-note { margin: 6px 0 0; }
+    .result-buttons { flex: 0 0 auto; margin-top: 8px; }
+}
+
+/* 横向きで高さが足りないときは装飾をさらに削る */
+@media (min-width: 700px) and (orientation: landscape) and (max-height: 900px) {
+    .victory-keyart { height: clamp(96px, 17vh, 170px); }
+    .result-list li { padding: 8px 12px; font-size: 0.98rem; }
+    .live-panels { margin-top: 8px; }
+}

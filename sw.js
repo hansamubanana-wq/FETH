@@ -1,5 +1,5 @@
-const APP_VERSION = "0.19.2";
-const APP_BUILD = 27;
+const APP_VERSION = "0.20.0";
+const APP_BUILD = 28;
 const CACHE_NAME = `feth-build-${APP_BUILD}`;
 
 const PRECACHE_URLS = [

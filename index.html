@@ -53,7 +53,7 @@
         🔄 新しいバージョンがあります。タップして更新してください
     </div>
     <div id="app">
-        <div class="version-badge" aria-label="アプリバージョン">v0.19.2</div>
+        <div class="version-badge" aria-label="アプリバージョン">v0.20.0</div>
         <!-- ホーム -->
         <section id="screen-home" class="screen active">
             <div class="home-particles" aria-hidden="true">
@@ -298,16 +298,22 @@
         <section id="screen-result" class="screen">
             <h2 id="result-title">🏁 結果発表</h2>
             <div id="gameover-banner" class="gameover-banner hidden">💥 破産者が出ました！ ゲーム終了・最終ランキング</div>
-            <div class="victory-keyart" aria-hidden="true">
-                <img id="victory-horse" class="victory-horse" src="" alt="">
-                <span class="victory-crown">WINNER</span>
+            <div class="result-body">
+                <div class="result-col result-col-main">
+                    <div class="victory-keyart" aria-hidden="true">
+                        <img id="victory-horse" class="victory-horse" src="" alt="">
+                        <span class="victory-crown">WINNER</span>
+                    </div>
+                    <ol id="result-list" class="result-list"></ol>
+                </div>
+                <div class="result-col result-col-side">
+                    <h3 class="section-title">払い戻し</h3>
+                    <div id="payouts" class="payouts"></div>
+                    <h3 class="section-title">所持コイン順位</h3>
+                    <ol id="standings" class="standings"></ol>
+                    <div id="best-bet" class="best-bet hidden"></div>
+                </div>
             </div>
-            <ol id="result-list" class="result-list"></ol>
-            <h3 class="section-title">払い戻し</h3>
-            <div id="payouts" class="payouts"></div>
-            <h3 class="section-title">所持コイン順位</h3>
-            <ol id="standings" class="standings"></ol>
-            <div id="best-bet" class="best-bet hidden"></div>
             <p class="subtitle" id="result-note"></p>
             <div class="result-buttons">
                 <button id="rematch" class="primary">同じメンバーでもう一度</button>
