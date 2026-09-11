@@ -564,8 +564,7 @@ button.primary:hover {
 .card::before,
 .live-box::before,
 .payout-row::before,
-.best-bet::before,
-.guide-sec::before {
+.best-bet::before {
     content: "";
     position: absolute;
     inset: 5px;
@@ -576,8 +575,7 @@ button.primary:hover {
 
 .live-box,
 .payout-row,
-.best-bet,
-.guide-sec {
+.best-bet {
     position: relative;
     z-index: 1;
 }
@@ -1940,13 +1938,6 @@ code {
     padding: 12px;
 }
 
-/* 賭け方のコツ */
-#screen-guide {
-    min-height: calc(100svh - 72px);
-    padding-bottom: 36px;
-    background: radial-gradient(circle at 50% 4%, rgba(255, 207, 70, .11), transparent 36%);
-}
-
 .online-screen {
     min-height: calc(100svh - 88px);
     padding: clamp(18px, 5vh, 48px) 0 40px;
@@ -2030,90 +2021,6 @@ code {
     .online-screen { padding-top: 12px; }
     .player-cards { grid-template-columns: 1fr; }
     .online-panel { padding-inline: 14px; }
-}
-
-#screen-guide > h2 {
-    text-shadow: 0 3px 18px rgba(255, 200, 60, .34);
-}
-
-.guide {
-    max-width: 640px;
-    margin: 0 auto;
-    text-align: left;
-    line-height: 1.6;
-}
-
-.guide-sec {
-    background: linear-gradient(145deg, rgba(34, 48, 66, .96), rgba(12, 22, 35, .96));
-    border: 1px solid rgba(229, 190, 91, .34);
-    border-radius: 16px;
-    padding: 14px 18px;
-    margin-bottom: 12px;
-    box-shadow: 0 12px 28px rgba(0,0,0,.23), inset 0 1px 0 rgba(255,255,255,.05);
-}
-
-.guide-sec h3 {
-    margin: 0 0 8px;
-    color: var(--accent);
-    font-size: 1.05rem;
-}
-
-.guide ul {
-    margin: 6px 0;
-    padding-left: 1.2em;
-}
-
-.guide li {
-    margin: 4px 0;
-    font-size: 0.92rem;
-}
-
-.guide .guide-note {
-    color: var(--muted);
-    font-size: 0.85rem;
-    margin: 6px 0;
-}
-
-.ab-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.86rem;
-}
-
-.ab-table th,
-.ab-table td {
-    text-align: left;
-    padding: 6px 6px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    vertical-align: top;
-}
-
-.ab-table th {
-    color: var(--muted);
-    font-size: 0.8rem;
-}
-
-.ab-table .ab-name {
-    color: #ffb74d;
-    font-weight: 700;
-    white-space: nowrap;
-}
-
-.ab-table .ab-proc {
-    color: var(--accent);
-    font-weight: 700;
-    text-align: center;
-    white-space: nowrap;
-}
-
-.ab-strong {
-    color: #ff5252;
-    font-weight: 700;
-}
-
-.ab-mid {
-    color: #ffb74d;
-    font-weight: 700;
 }
 
 .hidden {

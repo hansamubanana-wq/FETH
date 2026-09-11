@@ -1,5 +1,5 @@
-const APP_VERSION = "0.20.0";
-const APP_BUILD = 28;
+const APP_VERSION = "0.20.1";
+const APP_BUILD = 29;
 const CACHE_NAME = `feth-build-${APP_BUILD}`;
 
 const PRECACHE_URLS = [
@@ -48,7 +48,6 @@ const PRECACHE_URLS = [
     "./src/engine.js",
     "./src/firebase-config.js",
     "./src/graphics-quality.js",
-    "./src/guide.js",
     "./src/horses.js",
     "./src/local.js",
     "./src/main.js",

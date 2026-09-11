@@ -5,10 +5,6 @@ import { initBetUI } from "./betui.js";
 import { initLocal, enterLocalSetup } from "./local.js";
 import { initOnline, enterOnlineHome, reconnectIfPossible, inRoom, requestLeave, checkVersion } from "./online.js";
 import { APP_VERSION } from "./version.js";
-import { ABILITIES, STYLES } from "./horses.js";
-import { buildBetTypes } from "./bets.js";
-import { PLACE_N } from "./engine.js";
-import { buildGuideHTML } from "./guide.js";
 
 const dismissSplash = () => document.getElementById("app-splash")?.classList.add("loaded");
 if (document.readyState === "complete") dismissSplash();
@@ -40,12 +36,6 @@ document.getElementById("go-online").addEventListener("click", () => {
     enterOnlineHome();
     checkVersion(() => { if (updateBanner) updateBanner.classList.remove("hidden"); });
 });
-document.getElementById("go-guide").addEventListener("click", () => {
-    document.getElementById("guide-content").innerHTML =
-        buildGuideHTML(buildBetTypes(PLACE_N), ABILITIES, STYLES, PLACE_N);
-    showScreen("screen-guide");
-});
-
 document.querySelectorAll("[data-home]").forEach((b) =>
     b.addEventListener("click", () => showScreen("screen-home")));
 
